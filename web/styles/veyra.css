@@ -1,0 +1,57 @@
+/* Veyra on BoardUI. Accent is the emerald ramp. Legacy names keep existing
+ * screens on the same semantic tokens, so dark mode still flips in one place. */
+
+:root {
+  --color-accent-50: oklch(97.9% 0.021 166.113);
+  --color-accent-100: oklch(95% 0.052 163.051);
+  --color-accent-200: oklch(90.5% 0.093 164.15);
+  --color-accent-300: oklch(84.5% 0.143 164.978);
+  --color-accent-400: oklch(76.5% 0.177 163.223);
+  --color-accent-500: oklch(69.6% 0.17 162.48);
+  --color-accent-600: oklch(59.6% 0.145 163.225);
+  --color-accent-700: oklch(50.8% 0.118 165.612);
+  --color-accent-800: oklch(43.2% 0.095 166.913);
+  --color-accent-900: oklch(37.8% 0.077 168.94);
+  --color-accent-950: oklch(26.2% 0.051 172.552);
+}
+
+@theme inline {
+  --color-background: var(--color-background-full);
+  --color-foreground: var(--color-text-primary);
+  --color-muted: var(--color-text-secondary);
+  --color-surface: var(--color-background-primary-default);
+  --color-line: var(--color-border-button-default);
+  --color-primary: var(--color-accent-600);
+  --color-primary-foreground: var(--color-foreground-full);
+  --color-danger: var(--color-text-error-primary);
+  --color-danger-bg: var(--color-background-tertiary-error);
+  --color-card: var(--color-neutral-925);
+  --color-card-foreground: var(--color-neutral-50);
+  --color-card-muted: var(--color-neutral-400);
+  --color-brass: var(--color-amber-300);
+  --color-ring: var(--color-border-focus-ring);
+  --color-scrim: color-mix(in srgb, var(--color-neutral-925) 72%, transparent);
+  --font-display: var(--font-sans);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes veyra-toast {
+    from {
+      opacity: 0;
+      transform: translateY(-6px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  .veyra-toast {
+    animation: veyra-toast 160ms ease-out;
+  }
+}
+
+::selection {
+  background: var(--color-accent-700);
+  color: var(--color-foreground-full);
+}
