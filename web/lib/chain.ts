@@ -132,6 +132,18 @@ export async function viewCall<T>(
   return (text ? JSON.parse(text) : null) as T;
 }
 
+export function passNumber(tokenId: string) {
+  const digits = tokenId.match(/(\d+)$/);
+  return digits ? Number(digits[1]) : 0;
+}
+
+export function comparePassesNewest(
+  a: { token_id: string },
+  b: { token_id: string },
+) {
+  return passNumber(b.token_id) - passNumber(a.token_id);
+}
+
 export async function loadRegistry(): Promise<Registry> {
   const [ownerId, programs, memberships, accounting] = await Promise.all([
     viewCall<string>("get_protocol_owner"),
@@ -142,6 +154,23 @@ export async function loadRegistry(): Promise<Registry> {
     }),
     viewCall<Accounting>("get_accounting"),
   ]);
+  memberships.sort(comparePassesNewest);
+  const created = await Promise.all(
+    programs.map(async (program) => {
+      const history = await viewCall<Activity[]>("get_program_history", {
+        program_id: program.id,
+      });
+      const first = history.reduce(
+        (earliest, item) => Math.min(earliest, Number(item.at)),
+        Number.POSITIVE_INFINITY,
+      );
+      return [program.id, Number.isFinite(first) ? first : 0] as const;
+    }),
+  );
+  const createdAt = new Map(created);
+  programs.sort(
+    (a, b) => (createdAt.get(b.id) ?? 0) - (createdAt.get(a.id) ?? 0),
+  );
   const entries = await Promise.all(
     memberships.map(async (membership) => {
       const history = await viewCall<Activity[]>("get_membership_history", {
