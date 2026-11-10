@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Button } from "@/components/base/buttons/button";
 import { ThemeToggle } from "@/components/application/theme/theme-toggle";
 import { useVeyra } from "@/components/providers";
@@ -9,10 +10,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const links = [
-  { href: "/overview", label: "Overview", detail: "Public ledger" },
-  { href: "/business", label: "Business", detail: "Create and issue" },
-  { href: "/member", label: "Member", detail: "Your passes" },
-  { href: "/explorer", label: "Explorer", detail: "Find a pass" },
+  { href: "/overview", label: "Overview" },
+  { href: "/business", label: "Business" },
+  { href: "/member", label: "Member" },
+  { href: "/explorer", label: "Explorer" },
 ];
 
 export function Shell({ children }: { children: React.ReactNode }) {
@@ -21,34 +22,59 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const visible = account
     ? links
     : links.filter((link) => link.href === "/overview");
+  const [open, setOpen] = useState(false);
 
   return (
-    <div className="flex min-h-dvh flex-col">
+    <div className="flex min-h-dvh flex-col bg-background-primary-default">
       <a
         href="#content"
-        className="sr-only focus:not-sr-only focus:absolute focus:start-4 focus:top-4 focus:z-20 focus:rounded-lg bg-background-primary-default px-3 py-2"
+        className="sr-only focus:not-sr-only focus:fixed focus:start-3 focus:top-3 focus:z-50 focus:border-2 focus:border-text-primary focus:bg-accent-400 focus:px-4 focus:py-3"
       >
         Skip to content
       </a>
-      <header className="border-b border-separator-border bg-background-primary-default">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-3 md:px-6 lg:px-8">
+      <header className="relative border-b border-text-primary bg-background-primary-default">
+        <div className="mx-auto flex h-[88px] w-full max-w-[1320px] items-center gap-6 px-5 md:gap-10 md:px-10">
           <Link
             href="/"
-            className="inline-flex min-h-10 shrink-0 items-baseline gap-3"
+            className="shrink-0 text-[26px] leading-none font-black tracking-[-0.055em] text-text-primary no-underline"
           >
-            <span className="text-title-2-medium text-text-primary">Veyra</span>
-            <span className="hidden text-caption-1-regular text-text-secondary sm:inline">
-              Programmable ownership
-            </span>
+            Veyra
           </Link>
-          <div className="flex flex-wrap items-center gap-2">
+          <nav
+            id="main-nav"
+            aria-label="Primary"
+            className={cx(
+              "items-center gap-7",
+              open
+                ? "absolute inset-x-0 top-[88px] z-20 flex flex-col items-start border-b-2 border-text-primary bg-background-primary-default px-5 py-4 md:static md:flex-row md:border-0 md:bg-transparent md:p-0"
+                : "hidden md:flex",
+            )}
+          >
+            {visible.map((link) => {
+              const active = pathname === link.href;
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  aria-current={active ? "page" : undefined}
+                  onClick={() => setOpen(false)}
+                  className={cx(
+                    "border-b-2 py-3 text-[15px] font-medium text-text-primary no-underline",
+                    active ? "border-accent-400" : "border-transparent",
+                  )}
+                >
+                  {link.label}
+                </Link>
+              );
+            })}
+          </nav>
+          <div className="ml-auto flex items-center gap-2.5">
             <ThemeToggle appearance="segmented" size="small" />
             {account ? (
               <Button
                 type="button"
-                variant="secondary"
                 onClick={() => void signOut()}
-                className="max-w-44"
+                className="max-w-[190px]"
               >
                 <span className="truncate">{shortAccount(account)}</span>
               </Button>
@@ -57,51 +83,55 @@ export function Shell({ children }: { children: React.ReactNode }) {
                 Sign in
               </Button>
             )}
+            <button
+              type="button"
+              className="h-11 border border-text-primary bg-background-primary-default px-3 text-[13px] font-bold md:hidden"
+              aria-expanded={open}
+              aria-controls="main-nav"
+              onClick={() => setOpen((value) => !value)}
+            >
+              {open ? "Close" : "Menu"}
+            </button>
           </div>
         </div>
-        <nav
-          aria-label="Primary"
-          className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-4 pb-3 md:px-6 lg:px-8"
-        >
-          {visible.map((link) => {
-            const active = pathname === link.href;
-            return (
-              <Link
-                key={link.href}
-                href={link.href}
-                aria-current={active ? "page" : undefined}
-                className={cx(
-                  "flex min-h-12 min-w-36 shrink-0 flex-col justify-center rounded-2lg px-3 outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring",
-                  active
-                    ? "bg-accent-50 text-text-primary"
-                    : "text-text-secondary hover:bg-background-secondary-default",
-                )}
-              >
-                <span className="text-body-medium text-text-primary">
-                  {link.label}
-                </span>
-                <span className="text-caption-1-regular text-text-secondary">
-                  {link.detail}
-                </span>
-              </Link>
-            );
-          })}
-        </nav>
       </header>
       {loadError ? (
         <p
           role="alert"
-          className="mx-auto max-w-7xl px-4 py-3 text-body-regular text-text-error-primary md:px-6 lg:px-8"
+          className="flex items-center justify-between gap-4 border-b border-text-primary bg-accent-50 px-5 py-3 text-sm text-text-primary md:px-10"
         >
           {loadError}
         </p>
       ) : null}
       <main
         id="content"
-        className="mx-auto flex w-full max-w-7xl flex-1 flex-col px-4 py-8 md:px-6 lg:px-8"
+        className="mx-auto flex w-full max-w-[1320px] flex-1 flex-col px-5 py-16 md:px-10"
       >
         {children}
       </main>
+      <footer className="border-t border-text-primary">
+        <div className="mx-auto flex w-full max-w-[1320px] flex-col gap-6 px-5 py-10 md:flex-row md:items-center md:justify-between md:px-10">
+          <div>
+            <p className="text-[26px] leading-none font-black tracking-[-0.055em]">
+              Veyra
+            </p>
+            <p className="mt-3 max-w-sm text-[13px] text-text-secondary">
+              Assets that own, earn, interact and evolve.
+            </p>
+          </div>
+          <nav aria-label="Footer" className="flex flex-wrap gap-x-6 gap-y-2">
+            {visible.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="py-2 text-[12px] font-semibold text-text-primary"
+              >
+                {link.label}
+              </Link>
+            ))}
+          </nav>
+        </div>
+      </footer>
     </div>
   );
 }

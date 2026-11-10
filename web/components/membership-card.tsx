@@ -10,7 +10,7 @@ export function MembershipCard({ membership }: { membership: MembershipView }) {
     registry.programs.find((program) => program.id === membership.program_id)
       ?.symbol ?? "";
   return (
-    <article className="overflow-hidden rounded-lg bg-card text-card-foreground shadow-sm">
+    <article className="overflow-hidden border-2 border-text-primary bg-card text-card-foreground">
       <PassArt
         expandable
         alt={`${membership.program_name} ${membership.tier_name}`}
@@ -30,25 +30,25 @@ export function MembershipCard({ membership }: { membership: MembershipView }) {
           </p>
           <p className="text-sm text-brass">{membership.token_id}</p>
         </div>
-        <h2 className="mt-8 font-display text-4xl tracking-tight">
+        <h2 className="mt-8 text-[46px] leading-[0.98] font-black tracking-[-0.035em]">
           {membership.tier_name}
         </h2>
         <p className="mt-1 text-card-muted">{membership.bound_account}</p>
       </div>
-      <dl className="grid grid-cols-3 gap-4 px-5 py-5 sm:px-6">
-        <div>
+      <dl className="grid grid-cols-3 border-t border-brass/50">
+        <div className="border-r border-brass/40 px-5 py-4">
           <dt className="text-xs text-card-muted">Balance</dt>
           <dd className="mt-1 text-lg tabular-nums">
             {formatUsdc(membership.usdc_vault || "0")}
           </dd>
         </div>
-        <div>
+        <div className="border-r border-brass/40 px-5 py-4">
           <dt className="text-xs text-card-muted">XP</dt>
           <dd className="mt-1 text-lg tabular-nums">
             {formatPoints(membership.xp)}
           </dd>
         </div>
-        <div>
+        <div className="px-5 py-4">
           <dt className="text-xs text-card-muted">Points</dt>
           <dd className="mt-1 text-lg tabular-nums">
             {formatPoints(membership.points)}

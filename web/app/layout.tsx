@@ -32,7 +32,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${inter.variable} h-full antialiased`}
       suppressHydrationWarning
     >
-      <body className="min-h-full bg-background-secondary-default text-text-primary">
+      <body className="min-h-full bg-background-primary-default text-text-primary">
         <Script id="boardui-theme" strategy="beforeInteractive">
           {themeScript}
         </Script>

@@ -12,7 +12,14 @@ import { MembershipCard } from "@/components/membership-card";
 import { PassArt } from "@/components/pass-art";
 import { PassCode } from "@/components/pass-code";
 import { useVeyra } from "@/components/providers";
-import { Field, Notice, Panel, inputClass, useAction } from "@/components/ui";
+import {
+  Field,
+  Notice,
+  PageIntro,
+  Panel,
+  inputClass,
+  useAction,
+} from "@/components/ui";
 import { GAS, ONE_YOCTO, USDC_TOKEN } from "@/lib/config";
 import { artworkSrc } from "@/lib/artwork";
 import { formatPoints, formatUsdc, parseUsdc } from "@/lib/format";
@@ -32,18 +39,15 @@ export function MemberDashboard() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <p className="text-sm text-muted">Member</p>
-        <h1 className="mt-1 font-display text-4xl tracking-tight text-foreground">
-          {tokenId ? "Your membership" : "Your passes"}
-        </h1>
-        <p className="mt-2 max-w-2xl text-muted">
-          {tokenId
-            ? "The card, the vault, and the access rights belong to the NFT. Transfer it and the next owner takes them."
-            : "Every pass this account holds. Open one to pay, transfer, or cash out."}
-          {account ? ` Signed in as ${account}.` : ""}
-        </p>
-      </div>
+      <PageIntro
+        eyebrow="Member"
+        title={tokenId ? "Your membership" : "Your passes"}
+      >
+        {tokenId
+          ? "The card, the vault, and the access rights belong to the NFT. Transfer it and the next owner takes them."
+          : "Every pass this account holds. Open one to pay, transfer, or cash out."}
+        {account ? ` Signed in as ${account}.` : ""}
+      </PageIntro>
       {tokenId ? <MemberDetail tokenId={tokenId} /> : <PassList />}
     </div>
   );
@@ -144,7 +148,7 @@ function PassList() {
             )?.symbol ?? "";
           return (
             <li key={membership.token_id}>
-              <div className="flex min-h-20 items-center gap-3 rounded-2lg border border-border-button-default bg-background-primary-default p-3">
+              <div className="flex min-h-20 items-center gap-3 border-2 border-text-primary bg-background-primary-default p-3">
                 <PassArt
                   expandable
                   alt={`${membership.program_name} pass`}

@@ -86,7 +86,8 @@ const styles = sortCx({
 
   // Base shape per size (used when label is present OR medium icon-only).
   size: {
-    medium: "h-12 rounded-2lg px-3 text-body-medium",
+    medium:
+      "h-[54px] rounded-none border-2 border-text-primary px-6 text-[16px] font-bold",
     small: "h-8 rounded-lg px-2 py-1.5 text-body-medium",
     xs: "h-6 rounded-sm px-2 text-caption-1-semibold",
   },
@@ -117,8 +118,9 @@ const styles = sortCx({
 
   variant: {
     primary: [
-      "bg-button-primary text-text-white shadow-xs",
-      "disabled:text-button-primary-disabled-foreground disabled:shadow-none",
+      "bg-button-primary text-text-white shadow-none",
+      "hover:bg-text-primary hover:text-accent-300",
+      "disabled:text-button-primary-disabled-foreground disabled:shadow-none disabled:hover:bg-button-primary disabled:hover:text-button-primary-disabled-foreground",
       "aria-disabled:text-button-primary-disabled-foreground aria-disabled:shadow-none",
     ].join(" "),
     danger: [
@@ -128,14 +130,14 @@ const styles = sortCx({
     ].join(" "),
     secondary: [
       "bg-background-primary-default text-text-primary",
-      "border border-border-button-default shadow-xs",
-      "hover:bg-background-primary-hover  hover:border-border-button-hover",
-      "active:bg-background-primary-active active:border-border-button-active",
+      "border-text-primary shadow-none",
+      "hover:bg-accent-50",
+      "active:bg-accent-100 active:border-text-primary",
       "disabled:bg-background-primary-disabled disabled:border-border-button-default disabled:text-text-tertiary disabled:shadow-none",
       "aria-disabled:bg-background-primary-disabled aria-disabled:border-border-button-default aria-disabled:text-text-tertiary aria-disabled:shadow-none",
     ].join(" "),
     ghost: [
-      "bg-button-ghost-background text-button-ghost-foreground",
+      "border-transparent bg-button-ghost-background text-button-ghost-foreground",
       "hover:bg-button-ghost-hover active:bg-button-ghost-active",
       "disabled:bg-button-ghost-disabled disabled:text-button-ghost-disabled-foreground disabled:shadow-none",
       "aria-disabled:bg-button-ghost-disabled aria-disabled:text-button-ghost-disabled-foreground aria-disabled:shadow-none",

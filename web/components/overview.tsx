@@ -4,7 +4,7 @@ import { RiArrowRightLine } from "@remixicon/react";
 import { ButtonLink } from "@/components/base/buttons/button";
 import { PassArt } from "@/components/pass-art";
 import { useVeyra } from "@/components/providers";
-import { Panel, Stat } from "@/components/ui";
+import { PageIntro, Panel, Stat } from "@/components/ui";
 import { artworkSrc } from "@/lib/artwork";
 import { formatPoints, formatUsdc } from "@/lib/format";
 
@@ -14,18 +14,12 @@ export function Overview() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <p className="text-sm text-muted">Overview</p>
-        <h1 className="mt-1 font-display text-4xl tracking-tight text-foreground">
-          On the contract
-        </h1>
-        <p className="mt-2 max-w-2xl text-muted">
-          Every programme and pass on this contract. Balances are USDC. A
-          programme starts at 0.00 USDC until someone claims test USDC and sends
-          it in.
-          {loading ? " Reading the contract." : ""}
-        </p>
-      </div>
+      <PageIntro eyebrow="Overview" title="On the contract">
+        Every programme and pass on this contract. Balances are USDC. A
+        programme starts at 0.00 USDC until someone claims test USDC and sends
+        it in.
+        {loading ? " Reading the contract." : ""}
+      </PageIntro>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label="Programmes" value={String(accounting.programmes)} />
         <Stat label="Memberships" value={String(accounting.memberships)} />
@@ -49,7 +43,7 @@ export function Overview() {
               {programs.map((program) => (
                 <li
                   key={program.id}
-                  className="flex items-center gap-3 rounded-2lg border border-border-button-default p-3"
+                  className="flex items-center gap-3 border-2 border-text-primary p-3"
                 >
                   <PassArt
                     expandable
@@ -82,7 +76,7 @@ export function Overview() {
               {memberships.map((membership) => (
                 <li
                   key={membership.token_id}
-                  className="flex items-center gap-3 rounded-2lg border border-border-button-default p-3"
+                  className="flex items-center gap-3 border-2 border-text-primary p-3"
                 >
                   <PassArt
                     expandable

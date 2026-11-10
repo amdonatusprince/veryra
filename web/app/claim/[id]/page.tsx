@@ -66,7 +66,7 @@ export default function ClaimPage() {
         ) : null}
         {claim === null ? (
           <div>
-            <h1 className="text-title-1-regular text-text-primary">
+            <h1 className="text-[clamp(2.5rem,5vw,3.5rem)] leading-[1.02] font-extrabold tracking-[-0.035em] text-text-primary">
               Claim closed
             </h1>
             <p className="mt-2 text-body-regular text-text-secondary">
@@ -81,7 +81,7 @@ export default function ClaimPage() {
               <p className="text-caption-1-regular text-text-secondary">
                 Claim
               </p>
-              <h1 className="mt-1 text-title-1-regular text-text-primary">
+              <h1 className="mt-1 text-[clamp(2.5rem,5vw,3.5rem)] leading-[1.02] font-extrabold tracking-[-0.035em] text-text-primary">
                 Claim your pass
               </h1>
             </div>

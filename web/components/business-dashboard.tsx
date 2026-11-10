@@ -12,7 +12,14 @@ import { Button } from "@/components/base/buttons/button";
 import { PassArt } from "@/components/pass-art";
 import { PassCode } from "@/components/pass-code";
 import { useVeyra } from "@/components/providers";
-import { Field, Notice, Panel, inputClass, useAction } from "@/components/ui";
+import {
+  Field,
+  Notice,
+  PageIntro,
+  Panel,
+  inputClass,
+  useAction,
+} from "@/components/ui";
 import { artworkSrc, passImage, storeImageUrl } from "@/lib/artwork";
 import {
   CONTRACT_ID,
@@ -84,19 +91,16 @@ export function BusinessDashboard() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <p className="text-sm text-muted">Business</p>
-        <h1 className="mt-1 font-display text-4xl tracking-tight text-foreground">
-          {openId ? "Programme" : "Create a programme"}
-        </h1>
-        <p className="mt-2 max-w-2xl text-base text-muted">
-          {openId
-            ? "Issue passes, add USDC, and request a payment for this programme."
-            : "A programme is the membership. Pick a color, set the tiers, and issue a pass to a member or a claim link."}
-          {account ? ` Signed in as ${account}.` : ""}
-          {loading ? " Reading the contract." : ""}
-        </p>
-      </div>
+      <PageIntro
+        eyebrow="Business"
+        title={openId ? "Programme" : "Create a programme"}
+      >
+        {openId
+          ? "Issue passes, add USDC, and request a payment for this programme."
+          : "A programme is the membership. Pick a color, set the tiers, and issue a pass to a member or a claim link."}
+        {account ? ` Signed in as ${account}.` : ""}
+        {loading ? " Reading the contract." : ""}
+      </PageIntro>
       {openId ? (
         <ProgrammeDetail id={openId} />
       ) : (
@@ -411,7 +415,7 @@ function ProgrammeList() {
       <ul className="space-y-3">
         {visible.map((program) => (
           <li key={program.id}>
-            <div className="flex min-h-20 items-center gap-3 rounded-2lg border border-border-button-default bg-background-primary-default p-3">
+            <div className="flex min-h-20 items-center gap-3 border-2 border-text-primary bg-background-primary-default p-3">
               <PassArt
                 expandable
                 alt={`${program.name} artwork`}

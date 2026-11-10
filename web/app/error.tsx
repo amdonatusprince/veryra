@@ -4,7 +4,7 @@ import { Button } from "@/components/base/buttons/button";
 
 export default function Error({ reset }: { error: Error; reset: () => void }) {
   return (
-    <div className="rounded-3xl border border-border-button-default bg-background-primary-default p-6">
+    <div className="max-w-xl border-2 border-text-primary bg-background-primary-default p-8">
       <h1 className="text-title-1-regular text-text-primary">
         This page hit an error
       </h1>

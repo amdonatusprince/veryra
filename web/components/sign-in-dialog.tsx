@@ -39,7 +39,7 @@ export function SignInDialog() {
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative z-10 w-full max-w-md rounded-3xl border border-border-button-default bg-background-primary-default p-5"
+        className="relative z-10 w-full max-w-md border-2 border-text-primary bg-background-primary-default p-6"
       >
         <h2 id={titleId} className="text-title-1-regular text-text-primary">
           Sign in
@@ -60,7 +60,7 @@ export function SignInDialog() {
           ref={passkeyRef}
           type="button"
           disabled={pending}
-          className="mt-5 flex w-full items-center gap-3 rounded-2lg border border-border-button-default bg-background-secondary-default px-4 py-4 text-start outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring disabled:cursor-not-allowed disabled:opacity-60"
+          className="mt-5 flex w-full items-center gap-3 border-2 border-text-primary bg-background-primary-default px-4 py-4 text-start outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring disabled:cursor-not-allowed disabled:opacity-60"
           onClick={() => void signIn("passkey")}
         >
           <span className="min-w-0 flex-1">

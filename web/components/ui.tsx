@@ -6,7 +6,7 @@ import { useToast } from "@/components/toast";
 import { panicText } from "@/lib/chain";
 
 export const inputClass =
-  "min-h-12 w-full rounded-2lg bg-background-tertiary-default px-4 text-body-regular text-text-primary outline-none ring-2 ring-inset ring-transparent placeholder:text-text-tertiary focus:ring-border-button-active disabled:cursor-not-allowed disabled:bg-input-disabled-background disabled:text-input-disabled-text";
+  "min-h-12 w-full rounded-none border-2 border-text-primary bg-background-primary-default px-4 text-body-regular text-text-primary outline-none placeholder:text-text-tertiary focus:border-accent-600 disabled:cursor-not-allowed disabled:bg-accent-50 disabled:text-text-tertiary";
 
 export function Field({
   id,
@@ -48,7 +48,7 @@ export function Notice({
     return (
       <p
         role="alert"
-        className="rounded-2lg bg-background-tertiary-error px-3 py-2 text-body-regular text-text-error-primary"
+        className="border-s-[3px] border-text-primary bg-accent-50 px-4 py-3 text-body-regular text-text-primary"
       >
         {error}
       </p>
@@ -58,7 +58,7 @@ export function Notice({
     return (
       <p
         role="status"
-        className="rounded-2lg border border-border-button-default bg-background-primary-default px-3 py-2 text-body-regular text-text-primary"
+        className="border-2 border-text-primary bg-background-primary-default px-4 py-3 text-body-regular text-text-primary"
       >
         {status}
       </p>
@@ -102,6 +102,34 @@ export function useAction() {
   return { error, status, pending, act };
 }
 
+export function PageIntro({
+  eyebrow,
+  title,
+  children,
+}: {
+  eyebrow: string;
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <header className="border-b border-text-primary pb-8">
+      <p className="flex items-center gap-2.5 text-[15px] font-semibold text-text-primary">
+        <span
+          aria-hidden
+          className="size-3 shrink-0 border-2 border-text-primary bg-accent-400"
+        />
+        {eyebrow}
+      </p>
+      <h1 className="mt-5 max-w-4xl text-[clamp(2.75rem,5vw,4rem)] leading-[1.02] font-extrabold tracking-[-0.035em] text-text-primary">
+        {title}
+      </h1>
+      <div className="mt-5 max-w-[58ch] text-[17px] leading-relaxed text-text-secondary">
+        {children}
+      </div>
+    </header>
+  );
+}
+
 export function Panel({
   title,
   children,
@@ -110,18 +138,20 @@ export function Panel({
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-3xl border border-border-button-default bg-background-primary-default p-4 md:p-6">
-      <h2 className="text-title-1-regular text-text-primary">{title}</h2>
-      <div className="mt-4">{children}</div>
+    <section className="border-2 border-text-primary bg-background-primary-default">
+      <h2 className="border-b border-text-primary px-6 py-4 text-[22px] leading-none font-bold tracking-[-0.025em] text-text-primary">
+        {title}
+      </h2>
+      <div className="px-6 py-5">{children}</div>
     </section>
   );
 }
 
 export function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-3xl border border-border-button-default bg-background-primary-default p-4">
-      <p className="text-body-regular text-text-secondary">{label}</p>
-      <p className="mt-2 text-display-4-regular tabular-nums text-text-primary">
+    <div className="border-t-[6px] border-t-accent-400 border-r-2 border-b-2 border-l-2 border-text-primary bg-background-primary-default px-4 py-5">
+      <p className="text-[13px] font-semibold text-text-secondary">{label}</p>
+      <p className="mt-2 text-[28px] leading-none font-extrabold tracking-[-0.035em] text-text-primary tabular-nums">
         {value}
       </p>
     </div>

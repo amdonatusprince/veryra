@@ -4,7 +4,7 @@ import { useState } from "react";
 import { MembershipCard } from "@/components/membership-card";
 import { useVeyra } from "@/components/providers";
 import { Button } from "@/components/base/buttons/button";
-import { Field, Panel, inputClass } from "@/components/ui";
+import { Field, PageIntro, Panel, inputClass } from "@/components/ui";
 import {
   findMembership,
   viewCall,
@@ -23,17 +23,11 @@ export function Explorer() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <p className="text-sm text-muted">Explorer</p>
-        <h1 className="mt-1 font-display text-4xl tracking-tight">
-          Look up a pass
-        </h1>
-        <p className="mt-2 max-w-2xl text-muted">
-          Enter the pass address, such as the bound account, or the token id.
-          The page returns that membership.
-          {loading ? " Reading the contract." : ""}
-        </p>
-      </div>
+      <PageIntro eyebrow="Explorer" title="Look up a pass">
+        Enter the pass address, such as the bound account, or the token id. The
+        page returns that membership.
+        {loading ? " Reading the contract." : ""}
+      </PageIntro>
       <Panel title="Pass address">
         <form
           className="flex flex-wrap items-end gap-3"

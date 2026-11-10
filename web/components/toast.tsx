@@ -66,7 +66,7 @@ function ToastCard({
     <div
       role={item.tone === "err" ? "alert" : "status"}
       className={cx(
-        "veyra-toast pointer-events-auto flex items-start gap-3 rounded-2lg border border-border-button-default bg-background-primary-default p-3",
+        "veyra-toast pointer-events-auto flex items-start gap-3 border-2 border-text-primary bg-background-primary-default p-3",
         item.tone === "err"
           ? "border-s-4 border-s-border-error-default"
           : "border-s-4 border-s-accent-600",
