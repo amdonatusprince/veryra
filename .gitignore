@@ -1,0 +1,20 @@
+.DS_Store
+.env
+.env.local
+.keys/
+
+# Rust
+contract/target/
+token/target/
+**/*.rs.bk
+
+# Scripts
+scripts/node_modules/
+
+# Next.js
+web/node_modules/
+web/.next/
+web/out/
+web/tsconfig.tsbuildinfo
+web/.env.local
+web/data/media/

@@ -1,0 +1,4 @@
+[target.wasm32-unknown-unknown]
+# near-sdk 5 routes host calls such as panic_str through this cfg.
+# Without it, a panic becomes an empty wasm trap.
+rustflags = ["--cfg", "near"]
