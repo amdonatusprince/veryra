@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { PassArt } from "@/components/pass-art";
 import { useVeyra } from "@/components/providers";
 import { Button } from "@/components/base/buttons/button";
-import { Panel } from "@/components/ui";
+import { LoadingState, Panel } from "@/components/ui";
 import { artworkSrc } from "@/lib/artwork";
 import { viewCall, type ProgramView } from "@/lib/chain";
 import { GAS, STORAGE_DEPOSIT } from "@/lib/config";
@@ -59,10 +59,8 @@ export default function ClaimPage() {
   return (
     <div className="flex flex-1 items-center justify-center">
       <div className="mx-auto w-full max-w-md space-y-6 text-center">
-        {claim === undefined ? (
-          <p className="text-body-regular text-text-secondary">
-            Reading the claim.
-          </p>
+        {claim === undefined && !error ? (
+          <LoadingState label="Reading the claim" />
         ) : null}
         {claim === null ? (
           <div>

@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import { DirectionProvider } from "@/components/foundations/direction/direction";
 import { Providers } from "@/components/providers";
 import { Shell } from "@/components/shell";
+import { LoadingState } from "@/components/ui";
 import "@/styles/globals.css";
 
 const inter = Inter({
@@ -40,7 +41,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <Providers>
             <Suspense
               fallback={
-                <div className="min-h-full bg-background-secondary-default" />
+                <div className="flex min-h-dvh items-center justify-center bg-background-primary-default">
+                  <LoadingState label="Loading" />
+                </div>
               }
             >
               <Shell>{children}</Shell>

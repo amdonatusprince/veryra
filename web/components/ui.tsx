@@ -1,6 +1,7 @@
 "use client";
 
 import type { FormEvent, ReactNode } from "react";
+import { cx } from "@/utils/cx";
 import { useState } from "react";
 import { useToast } from "@/components/toast";
 import { panicText } from "@/lib/chain";
@@ -102,6 +103,22 @@ export function useAction() {
   return { error, status, pending, act };
 }
 
+export function LoadingState({ label = "Loading" }: { label?: string }) {
+  return (
+    <div
+      className="flex min-h-48 items-center justify-center gap-3"
+      role="status"
+      aria-live="polite"
+    >
+      <span
+        aria-hidden
+        className="size-8 shrink-0 animate-spin rounded-full border-2 border-text-primary border-t-accent-400 motion-reduce:animate-none"
+      />
+      <span className="text-body-regular text-text-secondary">{label}</span>
+    </div>
+  );
+}
+
 export function PageIntro({
   eyebrow,
   title,
@@ -127,6 +144,45 @@ export function PageIntro({
         {children}
       </div>
     </header>
+  );
+}
+
+export function SectionNav<T extends string>({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: T;
+  onChange: (value: T) => void;
+  options: { id: T; label: string }[];
+}) {
+  return (
+    <nav
+      aria-label={label}
+      className="flex flex-wrap gap-x-6 border-b border-text-primary"
+    >
+      {options.map((option) => {
+        const selected = option.id === value;
+        return (
+          <button
+            key={option.id}
+            type="button"
+            aria-pressed={selected}
+            onClick={() => onChange(option.id)}
+            className={cx(
+              "border-b-2 py-3 text-[15px] font-medium",
+              selected
+                ? "border-accent-400 text-text-primary"
+                : "border-transparent text-text-secondary",
+            )}
+          >
+            {option.label}
+          </button>
+        );
+      })}
+    </nav>
   );
 }
 
