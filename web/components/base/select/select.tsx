@@ -20,7 +20,6 @@ import {
   MENU_ITEM_ACTIVE,
   MENU_ITEMS_CONTAINER,
   MENU_POPOVER_SURFACE,
-  MENU_POPOVER_WIDTH,
 } from "@/components/base/dropdown/menu-styles";
 import { Label } from "@/components/base/input/label";
 import { ChevronDownSmall } from "@/components/foundations/icons/chevrons";
@@ -158,9 +157,11 @@ export function Select<T extends object>({
             ref={popoverRef}
             isNonModal
             offset={4}
+            containerPadding={12}
             className={cx(
-              MENU_POPOVER_WIDTH,
+              "w-(--trigger-width) max-w-[calc(100vw-1.5rem)]",
               MENU_POPOVER_SURFACE,
+              "max-h-[min(240px,calc(100dvh-1.5rem))]",
               // Listbox rows already space themselves 4px apart, so the
               // surface sits a touch tighter than the action-menu Dropdown.
               "p-2",
@@ -169,10 +170,7 @@ export function Select<T extends object>({
           >
             <AriaListBox
               items={items}
-              className={cx(
-                MENU_ITEMS_CONTAINER,
-                "max-h-[240px] overflow-auto",
-              )}
+              className={cx(MENU_ITEMS_CONTAINER, "max-h-full overflow-auto")}
             >
               <SelectSizeContext.Provider value={size}>
                 {children}

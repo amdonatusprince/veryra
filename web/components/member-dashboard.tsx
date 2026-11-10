@@ -8,21 +8,32 @@ import {
   RiArrowRightSLine,
 } from "@remixicon/react";
 import { Button, ButtonLink } from "@/components/base/buttons/button";
+import { Pagination } from "@/components/base/pagination/pagination";
 import { MembershipCard } from "@/components/membership-card";
 import { PassArt } from "@/components/pass-art";
 import { PassCode } from "@/components/pass-code";
 import { useVeyra } from "@/components/providers";
 import {
   Field,
+  LoadingState,
   Notice,
   PageIntro,
   Panel,
+  SectionNav,
   inputClass,
   useAction,
 } from "@/components/ui";
 import { GAS, ONE_YOCTO, USDC_TOKEN } from "@/lib/config";
 import { artworkSrc } from "@/lib/artwork";
-import { formatPoints, formatUsdc, parseUsdc } from "@/lib/format";
+import {
+  formatPoints,
+  formatUsdc,
+  parseUsdc,
+  passAccount,
+  passCode,
+  resolvePassId,
+} from "@/lib/format";
+import { comparePassesNewest } from "@/lib/chain";
 import { parsePayCode } from "@/lib/pay";
 
 const pageSize = 4;
@@ -59,7 +70,10 @@ function PassList() {
   const router = useRouter();
   const params = useSearchParams();
   const held = account
-    ? registry.memberships.filter((item) => item.owner_id === account)
+    ? registry.memberships
+        .filter((item) => item.owner_id === account)
+        .slice()
+        .sort(comparePassesNewest)
     : [];
   const pageCount = Math.max(1, Math.ceil(held.length / pageSize));
   const requested = Number(params.get("page") || "1");
@@ -89,15 +103,7 @@ function PassList() {
   if (loading && held.length === 0) {
     return (
       <Panel title="Your passes">
-        <div className="space-y-3" aria-busy="true">
-          <p className="text-sm text-muted">Reading passes for {account}.</p>
-          {Array.from({ length: 3 }, (_, index) => (
-            <div
-              key={index}
-              className="h-20 animate-pulse rounded-xl border border-line bg-background"
-            />
-          ))}
-        </div>
+        <LoadingState label="Reading passes" />
       </Panel>
     );
   }
@@ -175,7 +181,7 @@ function PassList() {
                       {membership.program_name}
                     </span>
                     <span className="mt-1 block text-caption-1-regular text-text-secondary">
-                      {membership.tier_name} · {membership.token_id}
+                      {membership.tier_name} · {passCode(membership.token_id)}
                       {membership.paused ? " · paused" : ""} ·{" "}
                       {formatUsdc(membership.usdc_vault || "0")} ·{" "}
                       {formatPoints(membership.points)} points
@@ -191,32 +197,13 @@ function PassList() {
           );
         })}
       </ul>
-      <nav
+      <Pagination
+        className="mt-4"
         aria-label="Pass pages"
-        className="mt-4 flex items-center justify-between gap-3"
-      >
-        <Button
-          type="button"
-          variant="secondary"
-          leadingIcon={RiArrowLeftLine}
-          disabled={page <= 1}
-          onClick={() => openPage(page - 1)}
-        >
-          Previous
-        </Button>
-        <p className="text-sm tabular-nums text-muted">
-          Page {page} of {pageCount}
-        </p>
-        <Button
-          type="button"
-          variant="secondary"
-          trailingIcon={RiArrowRightLine}
-          disabled={page >= pageCount}
-          onClick={() => openPage(page + 1)}
-        >
-          Next
-        </Button>
-      </nav>
+        page={page}
+        totalPages={pageCount}
+        onChange={openPage}
+      />
     </Panel>
   );
 }
@@ -231,6 +218,9 @@ function MemberDetail({ tokenId }: { tokenId: string }) {
       )
     : undefined;
   const { act, error, status, pending } = useAction();
+  const [section, setSection] = useState<
+    "pay" | "transfer" | "gift" | "withdraw"
+  >("pay");
 
   if (!account) {
     return (
@@ -259,11 +249,13 @@ function MemberDetail({ tokenId }: { tokenId: string }) {
   if (!current) {
     return (
       <Panel title="Your membership">
-        <p className="text-sm text-muted">
-          {loading
-            ? "Reading this pass from the contract."
-            : "This account does not hold that pass."}
-        </p>
+        {loading ? (
+          <LoadingState label="Reading this pass" />
+        ) : (
+          <p className="text-sm text-muted">
+            This account does not hold that pass.
+          </p>
+        )}
         <Button
           type="button"
           variant="secondary"
@@ -296,8 +288,8 @@ function MemberDetail({ tokenId }: { tokenId: string }) {
           <MembershipCard membership={current} />
           <div className="flex items-center gap-4">
             <PassCode
-              value={current.bound_account}
-              label={`Pass ${current.bound_account}`}
+              value={passAccount(current.token_id, current.bound_account)}
+              label={`Pass ${passAccount(current.token_id, current.bound_account)}`}
             />
             <p className="text-sm text-muted">
               This code is the pass address. Someone can look it up in the
@@ -311,7 +303,7 @@ function MemberDetail({ tokenId }: { tokenId: string }) {
               <div>
                 <dt className="text-muted">Bound account</dt>
                 <dd className="mt-1 break-all text-foreground">
-                  {current.bound_account}
+                  {passAccount(current.token_id, current.bound_account)}
                 </dd>
               </div>
               <div>
@@ -339,154 +331,179 @@ function MemberDetail({ tokenId }: { tokenId: string }) {
               <Notice error={error} status={status} />
             </div>
           </Panel>
-          <PayPanel
-            tokenId={current.token_id}
-            vault={current.usdc_vault || "0"}
+          <SectionNav
+            label="Pass actions"
+            value={section}
+            onChange={setSection}
+            options={[
+              { id: "pay", label: "Pay" },
+              { id: "transfer", label: "Transfer" },
+              { id: "gift", label: "Gift" },
+              { id: "withdraw", label: "Withdraw" },
+            ]}
           />
-          <Panel title="Transfer">
-            <form
-              className="grid gap-4"
-              onSubmit={(event) => {
-                const receiver = String(
-                  new FormData(event.currentTarget).get("receiver") ?? "",
-                );
-                void act(
-                  () =>
-                    send(
-                      "transfer_membership",
-                      {
-                        receiver_id: receiver,
-                        token_id: current.token_id,
-                        memo: "transfer",
-                      },
-                      { deposit: ONE_YOCTO, gas: GAS },
-                    ),
-                  `Transferred ${current.token_id} to ${receiver}.`,
-                  event,
-                );
-              }}
-            >
-              <Field
-                id="transfer-receiver"
-                label="New owner *"
-                hint="They receive the vault, the tier, and the access rights."
+          {section === "pay" ? (
+            <PayPanel
+              tokenId={current.token_id}
+              vault={current.usdc_vault || "0"}
+            />
+          ) : null}
+          {section === "transfer" ? (
+            <Panel title="Transfer">
+              <form
+                className="grid gap-4"
+                onSubmit={(event) => {
+                  const receiver = String(
+                    new FormData(event.currentTarget).get("receiver") ?? "",
+                  );
+                  void act(
+                    () =>
+                      send(
+                        "transfer_membership",
+                        {
+                          receiver_id: receiver,
+                          token_id: current.token_id,
+                          memo: "transfer",
+                        },
+                        { deposit: ONE_YOCTO, gas: GAS },
+                      ),
+                    `Transferred ${passCode(current.token_id)} to ${receiver}.`,
+                    event,
+                  );
+                }}
               >
-                <input
+                <Field
                   id="transfer-receiver"
-                  name="receiver"
-                  required
-                  autoComplete="off"
-                  className={inputClass}
-                />
-              </Field>
-              <Button type="submit" disabled={pending}>
-                Transfer membership
-              </Button>
-            </form>
-          </Panel>
-          <Panel title="Gift points">
-            <form
-              className="grid gap-4"
-              onSubmit={(event) => {
-                const data = new FormData(event.currentTarget);
-                const points = Number(data.get("gift-points"));
-                void act(
-                  () =>
-                    send(
-                      "gift_points",
-                      {
-                        from_token_id: current.token_id,
-                        to_token_id: String(data.get("gift-token")),
-                        points,
-                        memo: "gift",
-                      },
-                      { gas: GAS },
-                    ),
-                  "Points gifted. XP stays on this membership.",
-                  event,
-                );
-              }}
-            >
-              <Field
-                id="gift-token"
-                label="Recipient membership"
-                hint="Same programme. Points move. XP does not."
+                  label="New owner *"
+                  hint="They receive the vault, the tier, and the access rights."
+                >
+                  <input
+                    id="transfer-receiver"
+                    name="receiver"
+                    required
+                    autoComplete="off"
+                    className={inputClass}
+                  />
+                </Field>
+                <Button type="submit" disabled={pending}>
+                  Transfer membership
+                </Button>
+              </form>
+            </Panel>
+          ) : null}
+          {section === "gift" ? (
+            <Panel title="Gift points">
+              <form
+                className="grid gap-4"
+                onSubmit={(event) => {
+                  const data = new FormData(event.currentTarget);
+                  const points = Number(data.get("gift-points"));
+                  void act(
+                    () =>
+                      send(
+                        "gift_points",
+                        {
+                          from_token_id: current.token_id,
+                          to_token_id: resolvePassId(
+                            registry.memberships,
+                            String(data.get("gift-token")),
+                          ),
+                          points,
+                          memo: "gift",
+                        },
+                        { gas: GAS },
+                      ),
+                    "Points gifted. XP stays on this membership.",
+                    event,
+                  );
+                }}
               >
-                <input
+                <Field
                   id="gift-token"
-                  name="gift-token"
-                  required
-                  autoComplete="off"
-                  className={inputClass}
-                />
-              </Field>
-              <Field id="gift-points" label="Points">
-                <input
-                  id="gift-points"
-                  name="gift-points"
-                  required
-                  inputMode="numeric"
-                  className={inputClass}
-                  placeholder="20"
-                />
-              </Field>
-              <Button
-                type="submit"
-                variant="secondary"
-                disabled={pending || current.points === 0}
+                  label="Recipient membership"
+                  hint="Same programme. Points move. XP does not."
+                >
+                  <input
+                    id="gift-token"
+                    name="gift-token"
+                    required
+                    autoComplete="off"
+                    className={inputClass}
+                  />
+                </Field>
+                <Field id="gift-points" label="Points">
+                  <input
+                    id="gift-points"
+                    name="gift-points"
+                    required
+                    inputMode="numeric"
+                    className={inputClass}
+                    placeholder="20"
+                  />
+                </Field>
+                <Button
+                  type="submit"
+                  variant="secondary"
+                  disabled={pending || current.points === 0}
+                >
+                  Gift points
+                </Button>
+              </form>
+            </Panel>
+          ) : null}
+          {section === "withdraw" ? (
+            <Panel title="Withdraw">
+              <form
+                className="grid gap-4"
+                onSubmit={(event) => {
+                  const raw = String(
+                    new FormData(event.currentTarget).get("withdraw-amount") ??
+                      "",
+                  );
+                  void act(
+                    async () => {
+                      const amount = parseUsdc(raw);
+                      await send(
+                        "cash_out",
+                        {
+                          token_id: current.token_id,
+                          amount: amount.toString(),
+                        },
+                        { deposit: ONE_YOCTO, gas: GAS },
+                      );
+                    },
+                    "USDC sent to the current owner.",
+                    event,
+                  );
+                }}
               >
-                Gift points
-              </Button>
-            </form>
-          </Panel>
-          <Panel title="Withdraw">
-            <form
-              className="grid gap-4"
-              onSubmit={(event) => {
-                const raw = String(
-                  new FormData(event.currentTarget).get("withdraw-amount") ??
-                    "",
-                );
-                void act(
-                  async () => {
-                    const amount = parseUsdc(raw);
-                    await send(
-                      "cash_out",
-                      { token_id: current.token_id, amount: amount.toString() },
-                      { deposit: ONE_YOCTO, gas: GAS },
-                    );
-                  },
-                  "USDC sent to the current owner.",
-                  event,
-                );
-              }}
-            >
-              <Field
-                id="withdraw-amount"
-                label="Amount"
-                hint={`Available ${formatUsdc(current.usdc_vault || "0")}.`}
-              >
-                <input
+                <Field
                   id="withdraw-amount"
-                  name="withdraw-amount"
-                  required
-                  inputMode="decimal"
-                  autoComplete="off"
-                  className={inputClass}
-                  placeholder="1"
-                />
-              </Field>
-              <Button
-                type="submit"
-                variant="secondary"
-                disabled={
-                  pending || !current.usdc_vault || current.usdc_vault === "0"
-                }
-              >
-                Cash out
-              </Button>
-            </form>
-          </Panel>
+                  label="Amount"
+                  hint={`Available ${formatUsdc(current.usdc_vault || "0")}.`}
+                >
+                  <input
+                    id="withdraw-amount"
+                    name="withdraw-amount"
+                    required
+                    inputMode="decimal"
+                    autoComplete="off"
+                    className={inputClass}
+                    placeholder="1"
+                  />
+                </Field>
+                <Button
+                  type="submit"
+                  variant="secondary"
+                  disabled={
+                    pending || !current.usdc_vault || current.usdc_vault === "0"
+                  }
+                >
+                  Cash out
+                </Button>
+              </form>
+            </Panel>
+          ) : null}
         </div>
       </div>
     </div>

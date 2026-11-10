@@ -3,12 +3,13 @@
 import { RiArrowRightLine } from "@remixicon/react";
 import { ButtonLink } from "@/components/base/buttons/button";
 import { useVeyra } from "@/components/providers";
-import { formatUsdc } from "@/lib/format";
+import { LoadingState } from "@/components/ui";
+import { formatUsdc, passCode } from "@/lib/format";
 
 export function Home() {
   const { account, registry, loading } = useVeyra();
   const { accounting, memberships, programs } = registry;
-  const latest = memberships.slice(-4).reverse();
+  const latest = memberships.slice(0, 4);
 
   return (
     <div className="grid items-start gap-16 pt-8 pb-10 lg:grid-cols-2 lg:gap-[72px] lg:pt-12">
@@ -45,9 +46,7 @@ export function Home() {
         </p>
         <div className="px-6 py-6">
           {loading && programs.length === 0 ? (
-            <p className="mt-4 text-body-regular text-text-secondary">
-              Reading the contract.
-            </p>
+            <LoadingState label="Reading the contract" />
           ) : (
             <>
               <dl className="mt-4 grid grid-cols-2 gap-4">
@@ -92,7 +91,7 @@ export function Home() {
                       className="flex items-baseline justify-between gap-3"
                     >
                       <span className="text-body-regular text-text-primary">
-                        {item.token_id} · {item.program_name}
+                        {passCode(item.token_id)} · {item.program_name}
                       </span>
                       <span className="shrink-0 text-body-regular tabular-nums text-text-secondary">
                         {formatUsdc(item.usdc_vault || "0")}

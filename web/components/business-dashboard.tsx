@@ -2,13 +2,12 @@
 
 import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import {
-  RiArrowLeftLine,
-  RiArrowRightLine,
-  RiArrowRightSLine,
-} from "@remixicon/react";
+import { RiArrowLeftLine, RiArrowRightSLine } from "@remixicon/react";
 import { ArtworkField, type ArtworkMode } from "@/components/artwork-field";
 import { Button } from "@/components/base/buttons/button";
+import { Select, SelectItem } from "@/components/base/select/select";
+import { MemberSelect } from "@/components/member-select";
+import { Pagination } from "@/components/base/pagination/pagination";
 import { PassArt } from "@/components/pass-art";
 import { PassCode } from "@/components/pass-code";
 import { useVeyra } from "@/components/providers";
@@ -16,7 +15,9 @@ import {
   Field,
   Notice,
   PageIntro,
+  LoadingState,
   Panel,
+  SectionNav,
   inputClass,
   useAction,
 } from "@/components/ui";
@@ -29,8 +30,8 @@ import {
   STORAGE_DEPOSIT,
   USDC_TOKEN,
 } from "@/lib/config";
-import { formatPoints, formatUsdc, parseUsdc } from "@/lib/format";
-import { viewCall, type Tier } from "@/lib/chain";
+import { formatPoints, formatUsdc, parseUsdc, passCode } from "@/lib/format";
+import { comparePassesNewest, viewCall, type Tier } from "@/lib/chain";
 
 const pageSize = 4;
 
@@ -85,28 +86,49 @@ async function chosenMedia(
 }
 
 export function BusinessDashboard() {
-  const { account, loading } = useVeyra();
+  const { account } = useVeyra();
+  const router = useRouter();
   const params = useSearchParams();
   const openId = params.get("programme");
+  const creating = !openId && params.get("view") === "create";
 
   return (
     <div className="space-y-8">
       <PageIntro
         eyebrow="Business"
-        title={openId ? "Programme" : "Create a programme"}
+        title={
+          openId
+            ? "Programme"
+            : creating
+              ? "Create a programme"
+              : "Your programmes"
+        }
       >
         {openId
           ? "Issue passes, add USDC, and request a payment for this programme."
-          : "A programme is the membership. Pick a color, set the tiers, and issue a pass to a member or a claim link."}
+          : creating
+            ? "A programme is the membership. Pick a color, set the tiers, and issue a pass to a member or a claim link."
+            : "Programmes this account has created. Open one to issue a pass or move USDC."}
         {account ? ` Signed in as ${account}.` : ""}
-        {loading ? " Reading the contract." : ""}
       </PageIntro>
       {openId ? (
         <ProgrammeDetail id={openId} />
       ) : (
         <>
-          <CreateProgram />
-          <ProgrammeList />
+          <SectionNav
+            label="Business"
+            value={creating ? "create" : "programmes"}
+            onChange={(next) =>
+              router.push(
+                next === "create" ? "/business?view=create" : "/business",
+              )
+            }
+            options={[
+              { id: "programmes", label: "Your programmes" },
+              { id: "create", label: "Create a programme" },
+            ]}
+          />
+          {creating ? <CreateProgram /> : <ProgrammeList />}
         </>
       )}
     </div>
@@ -124,181 +146,197 @@ function CreateProgram() {
   const [imageAddress, setImageAddress] = useState("");
 
   return (
-    <Panel title="Create a programme">
-      <form
-        className="space-y-4"
-        onSubmit={(event) => {
-          const data = new FormData(event.currentTarget);
-          const name = String(data.get("program-name") ?? "");
-          const symbol = "VEYRA";
-          const used = new Set<string>();
-          const parsed: Tier[] = tiers.map((tier, index) => ({
-            id: tierId(tier.name, index, used),
-            name: tier.name,
-            xp_threshold: index === 0 ? 0 : Number(tier.xp),
-            revenue_share_bps: Math.round(Number(tier.share) * 100),
-            access_rights: tier.rights
-              .split(",")
-              .map(accessRight)
-              .filter((right) => right.length >= 2),
-          }));
-          const share = parsed.reduce(
-            (sum, tier) => sum + tier.revenue_share_bps,
-            0,
-          );
-          const programId = programmeId();
-          void act(
-            async () => {
-              if (parsed.some((tier) => !tier.name.trim()))
-                throw new Error("Every tier needs a name.");
-              if (
-                parsed.some(
-                  (tier) =>
-                    !Number.isFinite(tier.xp_threshold) ||
-                    tier.xp_threshold < 0,
+    <div className="space-y-4">
+      <Panel title="Create a programme">
+        <form
+          id="create-programme"
+          className="space-y-4"
+          onSubmit={(event) => {
+            const data = new FormData(event.currentTarget);
+            const name = String(data.get("program-name") ?? "");
+            const symbol = "VEYRA";
+            const used = new Set<string>();
+            const parsed: Tier[] = tiers.map((tier, index) => ({
+              id: tierId(tier.name, index, used),
+              name: tier.name,
+              xp_threshold: index === 0 ? 0 : Number(tier.xp),
+              revenue_share_bps: Math.round(Number(tier.share) * 100),
+              access_rights: tier.rights
+                .split(",")
+                .map(accessRight)
+                .filter((right) => right.length >= 2),
+            }));
+            const share = parsed.reduce(
+              (sum, tier) => sum + tier.revenue_share_bps,
+              0,
+            );
+            const programId = programmeId();
+            void act(
+              async () => {
+                if (parsed.some((tier) => !tier.name.trim()))
+                  throw new Error("Every tier needs a name.");
+                if (
+                  parsed.some(
+                    (tier) =>
+                      !Number.isFinite(tier.xp_threshold) ||
+                      tier.xp_threshold < 0,
+                  )
                 )
-              )
-                throw new Error("Points to reach must be a number.");
-              if (share > 10000)
-                throw new Error("Revenue shares add up to more than 100%.");
-              await sendCalls([
-                {
-                  methodName: "create_program",
-                  args: { program_id: programId, name, symbol, tiers: parsed },
-                  deposit: STORAGE_DEPOSIT,
-                  gas: "140000000000000",
-                },
-                {
-                  methodName: "set_program_color",
-                  args: { program_id: programId, color },
-                  deposit: STORAGE_DEPOSIT,
-                  gas: "40000000000000",
-                },
-                {
-                  methodName: "set_program_media",
-                  args: {
-                    program_id: programId,
-                    media: await chosenMedia(
-                      artMode,
+                  throw new Error("Points to reach must be a number.");
+                if (share > 10000)
+                  throw new Error("Revenue shares add up to more than 100%.");
+                await sendCalls([
+                  {
+                    methodName: "create_program",
+                    args: {
+                      program_id: programId,
                       name,
-                      color,
-                      storedUrl,
-                      imageAddress,
-                    ),
+                      symbol,
+                      tiers: parsed,
+                    },
+                    deposit: STORAGE_DEPOSIT,
+                    gas: "140000000000000",
                   },
-                  deposit: STORAGE_DEPOSIT,
-                  gas: "100000000000000",
-                },
-              ]);
-              router.push(`/business?programme=${programId}`);
-            },
-            "Programme created. It is listed below once the contract confirms it.",
-            event,
-          );
-        }}
-      >
-        <Notice error={error} status={status} />
-        <Field
-          id="program-name"
-          label="Name *"
-          hint="The name members see on the pass."
+                  {
+                    methodName: "set_program_color",
+                    args: { program_id: programId, color },
+                    deposit: STORAGE_DEPOSIT,
+                    gas: "40000000000000",
+                  },
+                  {
+                    methodName: "set_program_media",
+                    args: {
+                      program_id: programId,
+                      media: await chosenMedia(
+                        artMode,
+                        name,
+                        color,
+                        storedUrl,
+                        imageAddress,
+                      ),
+                    },
+                    deposit: STORAGE_DEPOSIT,
+                    gas: "100000000000000",
+                  },
+                ]);
+                router.push(`/business?programme=${programId}`);
+              },
+              "Programme created. It is listed below once the contract confirms it.",
+              event,
+            );
+          }}
         >
-          <input
+          <Field
             id="program-name"
-            name="program-name"
-            required
-            autoComplete="organization"
-            placeholder="Museum"
-            className={inputClass}
+            label="Name *"
+            hint="The name members see on the pass."
+          >
+            <input
+              id="program-name"
+              name="program-name"
+              required
+              autoComplete="organization"
+              placeholder="Museum"
+              className={inputClass}
+            />
+          </Field>
+          <ArtworkField
+            color={color}
+            onColor={setColor}
+            mode={artMode}
+            onMode={setArtMode}
+            storedUrl={storedUrl}
+            onStoredUrl={setStoredUrl}
+            onSource={setImageAddress}
           />
-        </Field>
-        <ArtworkField
-          color={color}
-          onColor={setColor}
-          mode={artMode}
-          onMode={setArtMode}
-          storedUrl={storedUrl}
-          onStoredUrl={setStoredUrl}
-          onSource={setImageAddress}
-        />
-        <fieldset className="space-y-3">
-          <legend className="text-sm text-foreground">Tiers</legend>
-          <p className="text-xs text-muted">
-            The first tier is where a new member starts. Revenue share is the
-            percent of recorded revenue that tier receives.
-          </p>
-          {tiers.map((tier, index) => (
-            <div
-              key={index}
-              className="grid gap-3 rounded-md border border-line p-3 md:grid-cols-4"
-            >
-              <Field id={`tier-name-${index}`} label="Name">
-                <input
-                  id={`tier-name-${index}`}
-                  required
-                  value={tier.name}
-                  placeholder={index === 0 ? "Member" : "Gold"}
-                  onChange={(event) =>
-                    updateTier(setTiers, index, "name", event.target.value)
-                  }
-                  className={inputClass}
-                />
-              </Field>
-              <Field
-                id={`tier-xp-${index}`}
-                label="Points to reach"
-                hint={
-                  index === 0
-                    ? "The starting tier is always 0."
-                    : "Points a member needs for this tier."
-                }
+          <fieldset className="space-y-3">
+            <legend className="text-sm text-foreground">Tiers</legend>
+            <p className="text-xs text-muted">
+              The first tier is where a new member starts. Revenue share is the
+              percent of recorded revenue that tier receives.
+            </p>
+            {tiers.map((tier, index) => (
+              <div
+                key={index}
+                className="grid gap-3 rounded-md border border-line p-3 md:grid-cols-4"
               >
-                <input
+                <Field id={`tier-name-${index}`} label="Name">
+                  <input
+                    id={`tier-name-${index}`}
+                    required
+                    value={tier.name}
+                    placeholder={index === 0 ? "Member" : "Gold"}
+                    onChange={(event) =>
+                      updateTier(setTiers, index, "name", event.target.value)
+                    }
+                    className={inputClass}
+                  />
+                </Field>
+                <Field
                   id={`tier-xp-${index}`}
-                  inputMode="numeric"
-                  value={index === 0 ? "0" : tier.xp}
-                  disabled={index === 0}
-                  placeholder="100"
-                  onChange={(event) =>
-                    updateTier(setTiers, index, "xp", event.target.value)
+                  label="Points to reach"
+                  hint={
+                    index === 0
+                      ? "The starting tier is always 0."
+                      : "Points a member needs for this tier."
                   }
-                  className={inputClass}
-                />
-              </Field>
-              <Field
-                id={`tier-share-${index}`}
-                label="Revenue share %"
-                hint="10 means this tier receives 10% of revenue."
-              >
-                <input
+                >
+                  <input
+                    id={`tier-xp-${index}`}
+                    inputMode="numeric"
+                    value={index === 0 ? "0" : tier.xp}
+                    disabled={index === 0}
+                    placeholder="100"
+                    onChange={(event) =>
+                      updateTier(setTiers, index, "xp", event.target.value)
+                    }
+                    className={inputClass}
+                  />
+                </Field>
+                <Field
                   id={`tier-share-${index}`}
-                  inputMode="decimal"
-                  value={tier.share}
-                  placeholder="10"
-                  onChange={(event) =>
-                    updateTier(setTiers, index, "share", event.target.value)
-                  }
-                  className={inputClass}
-                />
-              </Field>
-              <Field
-                id={`tier-rights-${index}`}
-                label="Access"
-                hint="Comma separated. Events, dinner is stored as events, dinner."
-              >
-                <input
+                  label="Revenue share %"
+                  hint="10 means this tier receives 10% of revenue."
+                >
+                  <input
+                    id={`tier-share-${index}`}
+                    inputMode="decimal"
+                    value={tier.share}
+                    placeholder="10"
+                    onChange={(event) =>
+                      updateTier(setTiers, index, "share", event.target.value)
+                    }
+                    className={inputClass}
+                  />
+                </Field>
+                <Field
                   id={`tier-rights-${index}`}
-                  value={tier.rights}
-                  placeholder="events"
-                  onChange={(event) =>
-                    updateTier(setTiers, index, "rights", event.target.value)
-                  }
-                  className={inputClass}
-                />
-              </Field>
-            </div>
-          ))}
-          <div className="flex flex-wrap gap-2">
+                  label="Access"
+                  hint="Comma separated. Events, dinner is stored as events, dinner."
+                >
+                  <input
+                    id={`tier-rights-${index}`}
+                    value={tier.rights}
+                    placeholder="events"
+                    onChange={(event) =>
+                      updateTier(setTiers, index, "rights", event.target.value)
+                    }
+                    className={inputClass}
+                  />
+                </Field>
+              </div>
+            ))}
+          </fieldset>
+          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-text-primary pt-4">
+            {tiers.length > 1 ? (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setTiers((current) => current.slice(0, -1))}
+              >
+                Remove last tier
+              </Button>
+            ) : null}
             <Button
               type="button"
               variant="secondary"
@@ -311,22 +349,14 @@ function CreateProgram() {
             >
               Add a tier
             </Button>
-            {tiers.length > 1 ? (
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => setTiers((current) => current.slice(0, -1))}
-              >
-                Remove last tier
-              </Button>
-            ) : null}
           </div>
-        </fieldset>
-        <Button type="submit" disabled={pending}>
-          {pending ? "Creating…" : "Create programme"}
-        </Button>
-      </form>
-    </Panel>
+        </form>
+      </Panel>
+      <Notice error={error} status={status} />
+      <Button type="submit" form="create-programme" disabled={pending}>
+        {pending ? "Creating…" : "Create programme"}
+      </Button>
+    </div>
   );
 }
 
@@ -335,8 +365,17 @@ function ProgrammeList() {
     useVeyra();
   const router = useRouter();
   const params = useSearchParams();
+  const programmeOrder = new Map(
+    registry.programs.map((program, index) => [program.id, index]),
+  );
   const owned = account
-    ? registry.programs.filter((item) => item.owner_id === account)
+    ? registry.programs
+        .filter((item) => item.owner_id === account)
+        .slice()
+        .sort(
+          (a, b) =>
+            (programmeOrder.get(a.id) ?? 0) - (programmeOrder.get(b.id) ?? 0),
+        )
     : [];
   const pageCount = Math.max(1, Math.ceil(owned.length / pageSize));
   const requested = Number(params.get("page") || "1");
@@ -366,17 +405,7 @@ function ProgrammeList() {
   if (loading && owned.length === 0) {
     return (
       <Panel title="Your programmes">
-        <div className="space-y-3" aria-busy="true">
-          <p className="text-sm text-muted">
-            Reading programmes from the contract.
-          </p>
-          {Array.from({ length: 3 }, (_, index) => (
-            <div
-              key={index}
-              className="h-20 animate-pulse rounded-xl border border-line bg-background"
-            />
-          ))}
-        </div>
+        <LoadingState label="Reading programmes" />
       </Panel>
     );
   }
@@ -452,32 +481,13 @@ function ProgrammeList() {
           </li>
         ))}
       </ul>
-      <nav
+      <Pagination
+        className="mt-4"
         aria-label="Programme pages"
-        className="mt-4 flex items-center justify-between gap-3"
-      >
-        <Button
-          type="button"
-          variant="secondary"
-          leadingIcon={RiArrowLeftLine}
-          disabled={page <= 1}
-          onClick={() => openPage(page - 1)}
-        >
-          Previous
-        </Button>
-        <p className="text-sm tabular-nums text-muted">
-          Page {page} of {pageCount}
-        </p>
-        <Button
-          type="button"
-          variant="secondary"
-          trailingIcon={RiArrowRightLine}
-          disabled={page >= pageCount}
-          onClick={() => openPage(page + 1)}
-        >
-          Next
-        </Button>
-      </nav>
+        page={page}
+        totalPages={pageCount}
+        onChange={openPage}
+      />
     </Panel>
   );
 }
@@ -493,6 +503,17 @@ function ProgrammeDetail({ id }: { id: string }) {
   const { act, error, status, pending } = useAction();
   const [claimId, setClaimId] = useState("");
   const [claimUrl, setClaimUrl] = useState("");
+  const [section, setSection] = useState<
+    "details" | "issue" | "members" | "value" | "points" | "payment"
+  >("issue");
+  const [valueView, setValueView] = useState<
+    "claim" | "vault" | "rewards" | "pay"
+  >("claim");
+  const [pointsView, setPointsView] = useState<"points" | "revenue">("points");
+  const [revenueView, setRevenueView] = useState<"record" | "distribute">(
+    "record",
+  );
+  const [memberPage, setMemberPage] = useState(1);
   const [artMode, setArtMode] = useState<ArtworkMode>("default");
   const [artColor, setArtColor] = useState(program?.color || "#1f4a3a");
   const [artUrl, setArtUrl] = useState("");
@@ -540,11 +561,13 @@ function ProgrammeDetail({ id }: { id: string }) {
   if (!program) {
     return (
       <Panel title="Programme">
-        <p className="text-sm text-muted">
-          {loading
-            ? "Reading this programme from the contract."
-            : "This account does not have that programme."}
-        </p>
+        {loading ? (
+          <LoadingState label="Reading this programme" />
+        ) : (
+          <p className="text-sm text-muted">
+            This account does not have that programme.
+          </p>
+        )}
         <Button
           type="button"
           variant="secondary"
@@ -558,302 +581,374 @@ function ProgrammeDetail({ id }: { id: string }) {
     );
   }
   const mine = account === program.owner_id;
-  const members = registry.memberships.filter(
-    (item) => item.program_id === program.id,
+  const members = registry.memberships
+    .filter((item) => item.program_id === program.id)
+    .slice()
+    .sort(comparePassesNewest);
+  const memberPages = Math.max(1, Math.ceil(members.length / pageSize));
+  const shownMemberPage = Math.min(memberPage, memberPages);
+  const visibleMembers = members.slice(
+    (shownMemberPage - 1) * pageSize,
+    shownMemberPage * pageSize,
   );
 
   return (
     <div className="space-y-6">
-      <Panel title={program.name}>
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <Button
-            type="button"
-            variant="secondary"
-            leadingIcon={RiArrowLeftLine}
-            onClick={() => router.push(backHref(params))}
-          >
-            All programmes
-          </Button>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              disabled={!mine || pending}
-              onClick={() =>
-                void act(
-                  () =>
-                    send(
-                      program.paused ? "resume_program" : "pause_program",
-                      { program_id: program.id },
-                      { gas: GAS },
-                    ),
-                  program.paused ? "Programme resumed." : "Programme paused.",
-                )
-              }
-            >
-              {program.paused ? "Resume" : "Pause"}
-            </Button>
-          </div>
-        </div>
-        <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
-          <div>
-            <dt className="text-muted">Reward pool</dt>
-            <dd className="tabular-nums text-foreground">
-              {formatUsdc(program.usdc_reward_pool || "0")}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-muted">Revenue pool</dt>
-            <dd className="tabular-nums text-foreground">
-              {formatUsdc(program.usdc_revenue_pool || "0")}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-muted">Tiers</dt>
-            <dd className="text-foreground">
-              {program.tiers.map((tier) => tier.name).join(", ")}
-            </dd>
-          </div>
-        </dl>
-        {!mine ? (
-          <p className="mt-4 text-sm text-muted">
-            Sign in as {program.owner_id} to manage this programme.
-          </p>
-        ) : null}
-        <form
-          key={program.id}
-          className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end"
-          onSubmit={(event) => {
-            const data = new FormData(event.currentTarget);
-            void act(
-              () =>
-                send(
-                  "update_program",
-                  {
-                    program_id: program.id,
-                    name: String(data.get("edit-name") ?? ""),
-                    symbol: "VEYRA",
-                  },
-                  { gas: GAS },
-                ),
-              "Programme updated.",
-              event,
-            );
-          }}
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <Button
+          type="button"
+          variant="secondary"
+          leadingIcon={RiArrowLeftLine}
+          onClick={() => router.push(backHref(params))}
         >
-          <Field id="edit-name" label="Name">
-            <input
-              id="edit-name"
-              name="edit-name"
-              required
-              defaultValue={program.name}
-              className={inputClass}
-            />
-          </Field>
-          <Button type="submit" variant="secondary" disabled={!mine || pending}>
-            Save
-          </Button>
-        </form>
-        <div className="mt-4 space-y-3">
-          <ArtworkField
-            color={artColor}
-            onColor={setArtColor}
-            mode={artMode}
-            onMode={setArtMode}
-            storedUrl={artUrl}
-            onStoredUrl={setArtUrl}
-            onSource={setImageAddress}
-          />
+          All programmes
+        </Button>
+        <div className="flex flex-wrap gap-2">
           <Button
             type="button"
             variant="secondary"
             disabled={!mine || pending}
-            onClick={() => {
-              void act(async () => {
-                const media = await chosenMedia(
-                  artMode,
-                  program.name,
-                  artColor,
-                  artUrl,
-                  imageAddress,
-                );
-                await sendCalls([
-                  {
-                    methodName: "set_program_color",
-                    args: { program_id: program.id, color: artColor },
-                    deposit: STORAGE_DEPOSIT,
-                    gas: "80000000000000",
-                  },
-                  {
-                    methodName: "set_program_media",
-                    args: { program_id: program.id, media },
-                    deposit: STORAGE_DEPOSIT,
-                    gas: "180000000000000",
-                  },
-                ]);
-              }, "Pass artwork updated.");
-            }}
+            onClick={() =>
+              void act(
+                () =>
+                  send(
+                    program.paused ? "resume_program" : "pause_program",
+                    { program_id: program.id },
+                    { gas: GAS },
+                  ),
+                program.paused ? "Programme resumed." : "Programme paused.",
+              )
+            }
           >
-            Update artwork
+            {program.paused ? "Resume" : "Pause"}
           </Button>
         </div>
-        <div className="mt-4">
-          <Notice error={error} status={status} />
+      </div>
+      <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
+        <div>
+          <dt className="text-muted">Reward pool</dt>
+          <dd className="tabular-nums text-foreground">
+            {formatUsdc(program.usdc_reward_pool || "0")}
+          </dd>
         </div>
-      </Panel>
-
-      <Panel title="Issue a membership">
-        <form
-          className="grid gap-4 md:grid-cols-3"
-          onSubmit={(event) => {
-            const data = new FormData(event.currentTarget);
-            const tier = String(data.get("tier") ?? "");
-            void act(
-              () =>
-                send(
-                  "issue_membership",
-                  {
-                    program_id: program.id,
-                    receiver_id: String(data.get("receiver") ?? ""),
-                    tier_id: tier || null,
-                    title: String(data.get("title") ?? "") || null,
-                    description: null,
-                  },
-                  { deposit: STORAGE_DEPOSIT, gas: MINT_GAS },
-                ),
-              "Membership issued.",
-              event,
-            );
-          }}
-        >
-          <Field id="receiver" label="Member account *">
-            <input
-              id="receiver"
-              name="receiver"
-              required
-              autoComplete="off"
-              placeholder="member.testnet"
-              className={inputClass}
-            />
-          </Field>
-          <Field id="tier" label="Tier">
-            <select
-              id="tier"
-              name="tier"
-              className={inputClass}
-              defaultValue=""
+        <div>
+          <dt className="text-muted">Revenue pool</dt>
+          <dd className="tabular-nums text-foreground">
+            {formatUsdc(program.usdc_revenue_pool || "0")}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-muted">Tiers</dt>
+          <dd className="text-foreground">
+            {program.tiers.map((tier) => tier.name).join(", ")}
+          </dd>
+        </div>
+      </dl>
+      {!mine ? (
+        <p className="mt-4 text-sm text-muted">
+          Sign in as {program.owner_id} to manage this programme.
+        </p>
+      ) : null}
+      <SectionNav
+        label="Programme actions"
+        value={section}
+        onChange={setSection}
+        options={[
+          { id: "issue", label: "Issue" },
+          { id: "members", label: "Members" },
+          { id: "value", label: "Value" },
+          { id: "points", label: "Points" },
+          { id: "payment", label: "Payment" },
+          { id: "details", label: "Details" },
+        ]}
+      />
+      <Notice error={error} status={status} />
+      {section === "details" ? (
+        <Panel title={program.name}>
+          <form
+            key={program.id}
+            className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end"
+            onSubmit={(event) => {
+              const data = new FormData(event.currentTarget);
+              void act(
+                () =>
+                  send(
+                    "update_program",
+                    {
+                      program_id: program.id,
+                      name: String(data.get("edit-name") ?? ""),
+                      symbol: "VEYRA",
+                    },
+                    { gas: GAS },
+                  ),
+                "Programme updated.",
+                event,
+              );
+            }}
+          >
+            <Field id="edit-name" label="Name">
+              <input
+                id="edit-name"
+                name="edit-name"
+                required
+                defaultValue={program.name}
+                className={inputClass}
+              />
+            </Field>
+            <Button
+              type="submit"
+              variant="secondary"
+              disabled={!mine || pending}
             >
-              <option value="">Starting tier</option>
-              {program.tiers.map((tier) => (
-                <option key={tier.id} value={tier.id}>
-                  {tier.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field id="title" label="Card title">
-            <input
-              id="title"
-              name="title"
-              autoComplete="off"
-              placeholder="Family pass"
-              className={inputClass}
-            />
-          </Field>
-          <div className="md:col-span-3 flex flex-wrap gap-2">
-            <Button type="submit" disabled={!mine || pending}>
-              Issue to this account
+              Save
             </Button>
+          </form>
+          <div className="mt-4 space-y-3">
+            <ArtworkField
+              color={artColor}
+              onColor={setArtColor}
+              mode={artMode}
+              onMode={setArtMode}
+              storedUrl={artUrl}
+              onStoredUrl={setArtUrl}
+              onSource={setImageAddress}
+            />
             <Button
               type="button"
               variant="secondary"
               disabled={!mine || pending}
               onClick={() => {
-                const id = programmeId().replace(/^p/, "c");
-                const tier =
-                  (document.getElementById("tier") as HTMLSelectElement | null)
-                    ?.value || null;
                 void act(async () => {
-                  await send(
-                    "open_claim",
-                    {
-                      claim_id: id,
-                      program_id: program.id,
-                      tier_id: tier,
-                      title: null,
-                    },
-                    { deposit: STORAGE_DEPOSIT, gas: GAS },
+                  const media = await chosenMedia(
+                    artMode,
+                    program.name,
+                    artColor,
+                    artUrl,
+                    imageAddress,
                   );
-                  setClaimId(id);
-                  setClaimUrl(`${window.location.origin}/claim/${id}`);
-                }, "Claim link is ready. It disappears after someone claims the pass.");
+                  await sendCalls([
+                    {
+                      methodName: "set_program_color",
+                      args: { program_id: program.id, color: artColor },
+                      deposit: STORAGE_DEPOSIT,
+                      gas: "80000000000000",
+                    },
+                    {
+                      methodName: "set_program_media",
+                      args: { program_id: program.id, media },
+                      deposit: STORAGE_DEPOSIT,
+                      gas: "180000000000000",
+                    },
+                  ]);
+                }, "Pass artwork updated.");
               }}
             >
-              Create a claim link
+              Update artwork
             </Button>
           </div>
-        </form>
-        {claimUrl ? (
-          <div className="mt-4 flex flex-wrap items-center gap-4">
-            <PassCode value={claimUrl} label="Claim this pass" />
-            <p className="max-w-sm text-sm text-muted">
-              Scan to mint. The code clears when the pass is claimed. {claimUrl}
-            </p>
-          </div>
-        ) : null}
-        {members.length === 0 ? (
-          <p className="mt-4 text-sm text-muted">
-            No memberships yet. Issue the first one to open a vault.
-          </p>
-        ) : (
-          <ul className="mt-4 divide-y divide-line text-sm">
-            {members.map((member) => (
-              <li
-                key={member.token_id}
-                className="flex flex-wrap items-baseline justify-between gap-2 py-3"
-              >
-                <span className="text-foreground">
-                  {member.token_id} · {member.owner_id}
-                </span>
-                <span className="tabular-nums text-muted">
-                  {member.tier_name} · {formatPoints(member.points)} pts ·{" "}
-                  {formatUsdc(member.usdc_vault || "0")}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Panel>
+        </Panel>
+      ) : null}
 
-      <div className="grid gap-6 xl:grid-cols-2">
-        <Panel title="Add value">
-          <p className="mb-4 text-sm text-muted">
-            This is how USDC gets onto a programme. Claim test USDC, then send
-            it into a pass, the reward pool, or revenue. 5000 means 5,000.00
-            USDC. The pass keeps that balance until someone pays or cashes out.
-          </p>
-          <Button
-            type="button"
-            variant="secondary"
-            className="mb-6"
-            disabled={pending || !USDC_TOKEN}
-            onClick={() =>
+      {section === "issue" ? (
+        <Panel title="Issue a membership">
+          <form
+            className="grid gap-4 md:grid-cols-2"
+            onSubmit={(event) => {
+              const data = new FormData(event.currentTarget);
+              const tier = String(data.get("tier") ?? "");
               void act(
                 () =>
                   send(
-                    "faucet",
-                    { account_id: null },
-                    { receiverId: USDC_TOKEN, gas: GAS },
+                    "issue_membership",
+                    {
+                      program_id: program.id,
+                      receiver_id: String(data.get("receiver") ?? ""),
+                      tier_id: tier && tier !== "starting" ? tier : null,
+                      title: null,
+                      description: null,
+                    },
+                    { deposit: STORAGE_DEPOSIT, gas: MINT_GAS },
                   ),
-                "Claimed 1,000.00 USDC. Send it into a pass, the reward pool, or revenue.",
-              )
-            }
+                "Membership issued.",
+                event,
+              );
+            }}
           >
-            Claim 1,000 USDC
-          </Button>
-          <div className="space-y-6">
+            <Field id="receiver" label="Member account *">
+              <input
+                id="receiver"
+                name="receiver"
+                required
+                autoComplete="off"
+                placeholder="member.testnet"
+                className={inputClass}
+              />
+            </Field>
+            <Field id="tier" label="Tier">
+              <Select
+                aria-label="Tier"
+                name="tier"
+                defaultSelectedKey="starting"
+                className="w-full"
+                triggerClassName="min-h-12 !rounded-none !border-2 !border-text-primary !px-4 !shadow-none"
+                popoverClassName="!rounded-none !border-2 !border-text-primary !shadow-none"
+              >
+                <SelectItem id="starting" textValue="Starting tier">
+                  Starting tier
+                </SelectItem>
+                {program.tiers.map((tier) => (
+                  <SelectItem key={tier.id} id={tier.id} textValue={tier.name}>
+                    {tier.name}
+                  </SelectItem>
+                ))}
+              </Select>
+            </Field>
+            <div className="flex flex-wrap gap-2 md:col-span-2">
+              <Button type="submit" disabled={!mine || pending}>
+                Issue to this account
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={!mine || pending}
+                onClick={(event) => {
+                  const form = event.currentTarget.form;
+                  if (!form) return;
+                  const id = programmeId().replace(/^p/, "c");
+                  const picked = String(new FormData(form).get("tier") ?? "");
+                  const tier = picked && picked !== "starting" ? picked : null;
+                  void act(async () => {
+                    await send(
+                      "open_claim",
+                      {
+                        claim_id: id,
+                        program_id: program.id,
+                        tier_id: tier,
+                        title: null,
+                      },
+                      { deposit: STORAGE_DEPOSIT, gas: GAS },
+                    );
+                    setClaimId(id);
+                    setClaimUrl(`${window.location.origin}/claim/${id}`);
+                  }, "Claim link is ready. It disappears after someone claims the pass.");
+                }}
+              >
+                Create a claim link
+              </Button>
+            </div>
+          </form>
+          {claimUrl ? (
+            <div className="mt-4 flex flex-wrap items-center gap-4">
+              <PassCode value={claimUrl} label="Claim this pass" />
+              <p className="max-w-sm text-sm text-muted">
+                Scan to mint. The code clears when the pass is claimed.{" "}
+                {claimUrl}
+              </p>
+            </div>
+          ) : null}
+          <p className="mt-4 max-w-xl text-sm text-muted">
+            Each pass gets its own code. Open Members to see the customers.
+          </p>
+        </Panel>
+      ) : null}
+      {section === "members" ? (
+        <Panel title="Members">
+          <p className="max-w-xl text-sm text-muted">
+            Customers who hold a pass in this programme. The code tracks that
+            pass.
+          </p>
+          {members.length === 0 ? (
+            <div className="mt-4 space-y-4">
+              <p className="text-sm text-muted">
+                No members yet. Issue a pass first.
+              </p>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setSection("issue")}
+              >
+                Issue a pass
+              </Button>
+            </div>
+          ) : (
+            <>
+              <ul className="mt-4 divide-y divide-line text-sm">
+                {visibleMembers.map((member) => (
+                  <li
+                    key={member.token_id}
+                    className="flex flex-wrap items-baseline justify-between gap-2 py-3"
+                  >
+                    <span className="text-foreground">
+                      <span className="font-medium tracking-wide">
+                        {passCode(member.token_id)}
+                      </span>
+                      <span className="mt-1 block text-muted">
+                        {member.owner_id}
+                      </span>
+                    </span>
+                    <span className="tabular-nums text-muted">
+                      {member.tier_name} · {formatPoints(member.points)} pts ·{" "}
+                      {formatUsdc(member.usdc_vault || "0")}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <Pagination
+                className="mt-4"
+                aria-label="Member pages"
+                page={shownMemberPage}
+                totalPages={memberPages}
+                onChange={setMemberPage}
+              />
+            </>
+          )}
+        </Panel>
+      ) : null}
+
+      {section === "value" ? (
+        <Panel title="Add value">
+          <SectionNav
+            label="Value actions"
+            value={valueView}
+            onChange={setValueView}
+            options={[
+              { id: "claim", label: "Claim" },
+              { id: "vault", label: "Fund vault" },
+              { id: "rewards", label: "Reward pool" },
+              { id: "pay", label: "Pay reward" },
+            ]}
+          />
+          {valueView === "claim" ? (
+            <div className="mt-4 space-y-4">
+              <p className="max-w-xl text-sm text-muted">
+                Take 1,000.00 USDC once a day. Send it into a pass or a pool
+                after that.
+              </p>
+              <Button
+                type="button"
+                disabled={pending || !USDC_TOKEN}
+                onClick={() =>
+                  void act(
+                    () =>
+                      send(
+                        "faucet",
+                        { account_id: null },
+                        { receiverId: USDC_TOKEN, gas: GAS },
+                      ),
+                    "Claimed 1,000.00 USDC.",
+                  )
+                }
+              >
+                Claim 1,000 USDC
+              </Button>
+            </div>
+          ) : null}
+          {valueView === "vault" && members.length === 0 ? (
+            <IssuePassFirst onIssue={() => setSection("issue")} />
+          ) : null}
+          {valueView === "vault" && members.length > 0 ? (
             <form
-              className="grid gap-3"
+              className="mt-4 grid gap-3"
               onSubmit={(event) => {
                 const data = new FormData(event.currentTarget);
                 void act(
@@ -879,17 +974,21 @@ function ProgrammeDetail({ id }: { id: string }) {
                 );
               }}
             >
+              <p className="max-w-xl text-sm text-muted">
+                Send USDC from your account onto one pass. The member keeps the
+                pass and can pay or cash out later.
+              </p>
               <Field id="fund-token" label="Membership">
-                <TokenSelect
+                <MemberSelect
                   id="fund-token"
                   name="fund-token"
-                  tokens={members.map((member) => member.token_id)}
+                  members={members}
                 />
               </Field>
               <Field
                 id="fund-amount"
                 label="Amount"
-                hint="Claim 1,000 USDC first. 5000 is 5,000.00 USDC added to this pass."
+                hint="5000 is 5,000.00 USDC."
               >
                 <input
                   id="fund-amount"
@@ -901,12 +1000,14 @@ function ProgrammeDetail({ id }: { id: string }) {
                   placeholder="5000"
                 />
               </Field>
-              <Button type="submit" disabled={pending || members.length === 0}>
+              <Button type="submit" disabled={pending}>
                 Fund vault
               </Button>
             </form>
+          ) : null}
+          {valueView === "rewards" ? (
             <form
-              className="grid gap-3 border-t border-line pt-6"
+              className="mt-4 grid gap-3"
               onSubmit={(event) => {
                 const amount = parseUsdc(
                   String(
@@ -934,10 +1035,14 @@ function ProgrammeDetail({ id }: { id: string }) {
                 );
               }}
             >
+              <p className="max-w-xl text-sm text-muted">
+                Send USDC into the reward pool. You choose the pass and the
+                amount when you pay a reward.
+              </p>
               <Field
                 id="pool-amount"
-                label="Add to reward pool"
-                hint="5000 is 5,000.00 USDC of rewards waiting to be paid to a pass."
+                label="Amount"
+                hint="5000 is 5,000.00 USDC."
               >
                 <input
                   id="pool-amount"
@@ -949,16 +1054,17 @@ function ProgrammeDetail({ id }: { id: string }) {
                   placeholder="5000"
                 />
               </Field>
-              <Button
-                type="submit"
-                variant="secondary"
-                disabled={!mine || pending}
-              >
+              <Button type="submit" disabled={!mine || pending}>
                 Fund reward pool
               </Button>
             </form>
+          ) : null}
+          {valueView === "pay" && members.length === 0 ? (
+            <IssuePassFirst onIssue={() => setSection("issue")} />
+          ) : null}
+          {valueView === "pay" && members.length > 0 ? (
             <form
-              className="grid gap-3 border-t border-line pt-6"
+              className="mt-4 grid gap-3"
               onSubmit={(event) => {
                 const data = new FormData(event.currentTarget);
                 void act(
@@ -979,11 +1085,15 @@ function ProgrammeDetail({ id }: { id: string }) {
                 );
               }}
             >
+              <p className="max-w-xl text-sm text-muted">
+                Move USDC from the reward pool onto one pass. You pick the
+                membership and the amount.
+              </p>
               <Field id="reward-token" label="Reward for">
-                <TokenSelect
+                <MemberSelect
                   id="reward-token"
                   name="reward-token"
-                  tokens={members.map((member) => member.token_id)}
+                  members={members}
                 />
               </Field>
               <Field id="reward-amount" label="Amount">
@@ -997,185 +1107,222 @@ function ProgrammeDetail({ id }: { id: string }) {
                   placeholder="5000"
                 />
               </Field>
-              <Button
-                type="submit"
-                disabled={!mine || pending || members.length === 0}
-              >
+              <Button type="submit" disabled={!mine || pending}>
                 Pay reward
               </Button>
             </form>
-          </div>
+          ) : null}
         </Panel>
+      ) : null}
+      {section === "points" ? (
         <Panel title="Points and revenue">
-          <form
-            className="grid gap-4"
-            onSubmit={(event) => {
-              const data = new FormData(event.currentTarget);
-              const points = Number(data.get("points"));
-              const action = String(data.get("point-action"));
-              void act(
-                () =>
-                  send(
-                    action === "revoke" ? "revoke_points" : "award_points",
-                    {
-                      token_id: String(data.get("point-token")),
-                      points,
-                      memo: String(data.get("memo") ?? "") || null,
-                    },
-                    { gas: GAS },
-                  ),
-                action === "revoke" ? "Points revoked." : "Points awarded.",
-                event,
-              );
-            }}
-          >
-            <Field id="point-token" label="Membership">
-              <select
-                id="point-token"
-                name="point-token"
-                className={inputClass}
-              >
-                {members.map((member) => (
-                  <option key={member.token_id} value={member.token_id}>
-                    {member.token_id}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field id="points" label="Points">
-              <input
-                id="points"
-                name="points"
-                inputMode="numeric"
-                required
-                className={inputClass}
-                placeholder="100"
-              />
-            </Field>
-            <Field id="memo" label="Memo">
-              <input
-                id="memo"
-                name="memo"
-                autoComplete="off"
-                className={inputClass}
-              />
-            </Field>
-            <input type="hidden" name="point-action" value="award" />
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="submit"
-                disabled={!mine || pending || members.length === 0}
-                onClick={(event) =>
-                  setPointAction(event.currentTarget.form, "award")
-                }
-              >
-                Award points
-              </Button>
-              <Button
-                type="submit"
-                variant="secondary"
-                disabled={!mine || pending || members.length === 0}
-                onClick={(event) =>
-                  setPointAction(event.currentTarget.form, "revoke")
-                }
-              >
-                Revoke points
-              </Button>
-            </div>
-          </form>
-          <form
-            className="mt-6 grid gap-4 border-t border-line pt-6"
-            onSubmit={(event) => {
-              const amount = parseUsdc(
-                String(new FormData(event.currentTarget).get("revenue") ?? ""),
-              );
-              void act(
-                () =>
-                  send(
-                    "ft_transfer_call",
-                    {
-                      receiver_id: CONTRACT_ID,
-                      amount: amount.toString(),
-                      memo: null,
-                      msg: `revenue:${program.id}`,
-                    },
-                    {
-                      receiverId: USDC_TOKEN,
-                      deposit: ONE_YOCTO,
-                      gas: MINT_GAS,
-                    },
-                  ),
-                "Revenue recorded.",
-                event,
-              );
-            }}
-          >
-            <Field
-              id="revenue"
-              label="Record revenue"
-              hint="5000 is 5,000.00 USDC of revenue to split by each tier's percent."
+          <SectionNav
+            label="Points and revenue"
+            value={pointsView}
+            onChange={setPointsView}
+            options={[
+              { id: "points", label: "Points" },
+              { id: "revenue", label: "Revenue" },
+            ]}
+          />
+          {pointsView === "points" && members.length === 0 ? (
+            <IssuePassFirst
+              detail="Points are awarded and revoked on a membership, so there is nothing to change until one exists."
+              onIssue={() => setSection("issue")}
+            />
+          ) : null}
+          {pointsView === "points" && members.length > 0 ? (
+            <form
+              className="mt-4 grid gap-4"
+              onSubmit={(event) => {
+                const data = new FormData(event.currentTarget);
+                const points = Number(data.get("points"));
+                const action = String(data.get("point-action"));
+                void act(
+                  () =>
+                    send(
+                      action === "revoke" ? "revoke_points" : "award_points",
+                      {
+                        token_id: String(data.get("point-token")),
+                        points,
+                        memo: String(data.get("memo") ?? "") || null,
+                      },
+                      { gas: GAS },
+                    ),
+                  action === "revoke" ? "Points revoked." : "Points awarded.",
+                  event,
+                );
+              }}
             >
-              <input
-                id="revenue"
-                name="revenue"
-                inputMode="decimal"
-                required
-                autoComplete="off"
-                className={inputClass}
-                placeholder="5000"
+              <p className="max-w-xl text-sm text-muted">
+                Award or revoke points on one pass. Awarded points also count as
+                XP. Revoking takes both away.
+              </p>
+              <Field id="point-token" label="Membership">
+                <MemberSelect
+                  id="point-token"
+                  name="point-token"
+                  members={members}
+                />
+              </Field>
+              <Field id="points" label="Points">
+                <input
+                  id="points"
+                  name="points"
+                  inputMode="numeric"
+                  required
+                  className={inputClass}
+                  placeholder="100"
+                />
+              </Field>
+              <Field id="memo" label="Memo">
+                <input
+                  id="memo"
+                  name="memo"
+                  autoComplete="off"
+                  className={inputClass}
+                />
+              </Field>
+              <input type="hidden" name="point-action" value="award" />
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="submit"
+                  disabled={!mine || pending}
+                  onClick={(event) =>
+                    setPointAction(event.currentTarget.form, "award")
+                  }
+                >
+                  Award points
+                </Button>
+                <Button
+                  type="submit"
+                  variant="secondary"
+                  disabled={!mine || pending}
+                  onClick={(event) =>
+                    setPointAction(event.currentTarget.form, "revoke")
+                  }
+                >
+                  Revoke points
+                </Button>
+              </div>
+            </form>
+          ) : null}
+          {pointsView === "revenue" ? (
+            <div className="mt-4 space-y-4">
+              <SectionNav
+                label="Revenue"
+                value={revenueView}
+                onChange={setRevenueView}
+                options={[
+                  { id: "record", label: "Record" },
+                  { id: "distribute", label: "Distribute" },
+                ]}
               />
-            </Field>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="submit"
-                variant="secondary"
-                disabled={!mine || pending}
-              >
-                Record revenue
-              </Button>
-              <Button
-                type="button"
-                disabled={!mine || pending}
-                onClick={() =>
-                  void act(
-                    () =>
-                      send(
-                        "distribute_usdc_revenue",
-                        { program_id: program.id },
-                        { gas: GAS },
+              {revenueView === "record" ? (
+                <form
+                  className="grid gap-4"
+                  onSubmit={(event) => {
+                    const amount = parseUsdc(
+                      String(
+                        new FormData(event.currentTarget).get("revenue") ?? "",
                       ),
-                    "Revenue distributed to the passes.",
-                  )
-                }
-              >
-                Distribute revenue
-              </Button>
+                    );
+                    void act(
+                      () =>
+                        send(
+                          "ft_transfer_call",
+                          {
+                            receiver_id: CONTRACT_ID,
+                            amount: amount.toString(),
+                            memo: null,
+                            msg: `revenue:${program.id}`,
+                          },
+                          {
+                            receiverId: USDC_TOKEN,
+                            deposit: ONE_YOCTO,
+                            gas: MINT_GAS,
+                          },
+                        ),
+                      "Revenue recorded.",
+                      event,
+                    );
+                  }}
+                >
+                  <p className="max-w-xl text-sm text-muted">
+                    This USDC comes from your account, the same balance you
+                    claim. It is not created by the programme. Recording it puts
+                    it in the revenue pool.
+                  </p>
+                  <Field
+                    id="revenue"
+                    label="Amount"
+                    hint="5000 is 5,000.00 USDC."
+                  >
+                    <input
+                      id="revenue"
+                      name="revenue"
+                      inputMode="decimal"
+                      required
+                      autoComplete="off"
+                      className={inputClass}
+                      placeholder="5000"
+                    />
+                  </Field>
+                  <Button type="submit" disabled={!mine || pending}>
+                    Record revenue
+                  </Button>
+                </form>
+              ) : (
+                <div className="space-y-4">
+                  <p className="max-w-xl text-sm text-muted">
+                    Split the revenue pool by the percent on each tier. Passes
+                    in a tier share that percent evenly, and the USDC lands on
+                    each pass.
+                  </p>
+                  <Button
+                    type="button"
+                    disabled={!mine || pending}
+                    onClick={() =>
+                      void act(
+                        () =>
+                          send(
+                            "distribute_usdc_revenue",
+                            { program_id: program.id },
+                            { gas: GAS },
+                          ),
+                        "Revenue distributed to the passes.",
+                      )
+                    }
+                  >
+                    Distribute revenue
+                  </Button>
+                </div>
+              )}
             </div>
-          </form>
+          ) : null}
         </Panel>
-      </div>
-      <Charge />
+      ) : null}
+      {section === "payment" ? <Charge /> : null}
     </div>
   );
 }
 
-function TokenSelect({
-  id,
-  name,
-  tokens,
+function IssuePassFirst({
+  detail = "Send value onto a membership after one exists.",
+  onIssue,
 }: {
-  id: string;
-  name: string;
-  tokens: string[];
+  detail?: string;
+  onIssue: () => void;
 }) {
   return (
-    <select id={id} name={name} className={inputClass}>
-      {tokens.map((token) => (
-        <option key={token} value={token}>
-          {token}
-        </option>
-      ))}
-    </select>
+    <div className="mt-4 space-y-4">
+      <p className="max-w-xl text-sm text-muted">
+        Issue a pass first. {detail}
+      </p>
+      <Button type="button" variant="secondary" onClick={onIssue}>
+        Issue a pass
+      </Button>
+    </div>
   );
 }
 

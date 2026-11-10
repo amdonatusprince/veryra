@@ -51,6 +51,61 @@ export function formatPoints(value: number): string {
   );
 }
 
+const passAlphabet = "abcdefghijkmnpqrstuvwxyz23456789";
+
+export function passCode(tokenId: string): string {
+  const existing = tokenId.trim().toLowerCase();
+  const serial = existing.match(/^m(\d+)$/);
+  if (
+    !serial &&
+    existing.length === 4 &&
+    [...existing].every((char) => passAlphabet.includes(char))
+  ) {
+    return existing;
+  }
+  const sequence = serial ? Number(serial[1]) : hashPass(existing);
+  let mixed = Math.imul(sequence, 0x9e3779b1) >>> 0;
+  mixed &= 0xfffff;
+  let code = "";
+  for (let index = 0; index < 4; index += 1) {
+    code += passAlphabet[mixed & 31];
+    mixed >>>= 5;
+  }
+  return code;
+}
+
+function hashPass(value: string) {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+export function passAccount(tokenId: string, boundAccount: string) {
+  const split = boundAccount.indexOf(".");
+  if (split <= 0) return boundAccount;
+  return `${passCode(tokenId)}${boundAccount.slice(split)}`;
+}
+
+export function resolvePassId(
+  memberships: { token_id: string; bound_account?: string }[],
+  query: string,
+): string {
+  const needle = query.trim().toLowerCase();
+  const found = memberships.find((item) => {
+    const account = item.bound_account ?? "";
+    return (
+      item.token_id.toLowerCase() === needle ||
+      passCode(item.token_id) === needle ||
+      account.toLowerCase() === needle ||
+      (account && passAccount(item.token_id, account).toLowerCase() === needle)
+    );
+  });
+  return found?.token_id ?? query.trim();
+}
+
 export function shortAccount(account: string): string {
   if (account.length <= 22) return account;
   return `${account.slice(0, 10)}…${account.slice(-8)}`;

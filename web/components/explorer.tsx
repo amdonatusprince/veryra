@@ -1,17 +1,23 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import { MembershipCard } from "@/components/membership-card";
 import { useVeyra } from "@/components/providers";
 import { Button } from "@/components/base/buttons/button";
-import { Field, PageIntro, Panel, inputClass } from "@/components/ui";
+import { PageIntro, Panel, inputClass } from "@/components/ui";
 import {
   findMembership,
   viewCall,
   type Activity,
   type MembershipView,
 } from "@/lib/chain";
-import { formatNear, formatUsdc } from "@/lib/format";
+import {
+  formatNear,
+  formatUsdc,
+  passAccount,
+  resolvePassId,
+} from "@/lib/format";
 
 export function Explorer() {
   const [query, setQuery] = useState("");
@@ -19,24 +25,37 @@ export function Explorer() {
   const [history, setHistory] = useState<Activity[]>([]);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
-  const { loading } = useVeyra();
+  const { registry } = useVeyra();
+  const pathname = usePathname();
+  const [resetPath, setResetPath] = useState(pathname);
+  if (pathname !== resetPath) {
+    setResetPath(pathname);
+    setQuery("");
+    setCurrent(null);
+    setHistory([]);
+    setError("");
+    setPending(false);
+  }
 
   return (
     <div className="space-y-8">
       <PageIntro eyebrow="Explorer" title="Look up a pass">
         Enter the pass address, such as the bound account, or the token id. The
         page returns that membership.
-        {loading ? " Reading the contract." : ""}
       </PageIntro>
       <Panel title="Pass address">
         <form
-          className="flex flex-wrap items-end gap-3"
+          className="flex flex-col gap-1"
           onSubmit={(event) => {
             event.preventDefault();
             const needle = query.trim();
             setPending(true);
             setError("");
-            findMembership(needle)
+            const knownId = resolvePassId(registry.memberships, needle);
+            const known = registry.memberships.find(
+              (item) => item.token_id === knownId,
+            );
+            (known ? Promise.resolve(known) : findMembership(needle))
               .then(async (found) => {
                 if (!found) {
                   setCurrent(null);
@@ -63,25 +82,33 @@ export function Explorer() {
               .finally(() => setPending(false));
           }}
         >
-          <div className="min-w-0 flex-1">
-            <Field
+          <label
+            htmlFor="pass-query"
+            className="text-body-medium text-text-primary"
+          >
+            Membership pass
+          </label>
+          <div className="flex items-center gap-3">
+            <input
               id="pass-query"
-              label="Membership pass"
-              hint="Token id or bound account."
-            >
-              <input
-                id="pass-query"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                required
-                autoComplete="off"
-                className={inputClass}
-              />
-            </Field>
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              required
+              autoComplete="off"
+              placeholder="k7np or name.near"
+              aria-describedby="pass-query-hint"
+              className={`${inputClass} h-[54px] min-w-0 flex-1`}
+            />
+            <Button type="submit" disabled={pending} className="shrink-0">
+              {pending ? "Looking up…" : "Look up"}
+            </Button>
           </div>
-          <Button type="submit" disabled={pending}>
-            {pending ? "Looking up…" : "Look up"}
-          </Button>
+          <p
+            id="pass-query-hint"
+            className="text-caption-1-regular text-text-secondary"
+          >
+            Pass code or bound account.
+          </p>
         </form>
         {error ? <p className="mt-4 text-sm text-danger">{error}</p> : null}
       </Panel>
@@ -100,7 +127,7 @@ export function Explorer() {
                 <div>
                   <dt className="text-muted">Bound account</dt>
                   <dd className="break-all text-foreground">
-                    {current.bound_account}
+                    {passAccount(current.token_id, current.bound_account)}
                   </dd>
                 </div>
                 <div>

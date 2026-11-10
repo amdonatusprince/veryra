@@ -1,9 +1,16 @@
 "use client";
 
 import { useState } from "react";
+import {
+  RiArrowDownSLine,
+  RiFileCopyLine,
+  RiLogoutBoxRLine,
+} from "@remixicon/react";
 import { Button } from "@/components/base/buttons/button";
+import { Popover, PopoverTrigger } from "@/components/base/popover/popover";
 import { ThemeToggle } from "@/components/application/theme/theme-toggle";
 import { useVeyra } from "@/components/providers";
+import { useToast } from "@/components/toast";
 import { shortAccount } from "@/lib/format";
 import { cx } from "@/utils/cx";
 import Link from "next/link";
@@ -19,10 +26,12 @@ const links = [
 export function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { account, ready, loadError, openDialog, signOut } = useVeyra();
+  const toast = useToast();
   const visible = account
     ? links
     : links.filter((link) => link.href === "/overview");
   const [open, setOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
 
   return (
     <div className="flex min-h-dvh flex-col bg-background-primary-default">
@@ -71,13 +80,54 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <div className="ml-auto flex items-center gap-2.5">
             <ThemeToggle appearance="segmented" size="small" />
             {account ? (
-              <Button
-                type="button"
-                onClick={() => void signOut()}
-                className="max-w-[190px]"
+              <PopoverTrigger
+                isOpen={accountOpen}
+                onOpenChange={setAccountOpen}
               >
-                <span className="truncate">{shortAccount(account)}</span>
-              </Button>
+                <Button
+                  type="button"
+                  trailingIcon={RiArrowDownSLine}
+                  className="max-w-[220px]"
+                  aria-label={`Account ${account}`}
+                >
+                  <span className="truncate">{shortAccount(account)}</span>
+                </Button>
+                <Popover
+                  aria-label="Account"
+                  placement="bottom end"
+                  containerPadding={12}
+                  className="!w-56 !rounded-none !border-2 !border-text-primary !p-0 !shadow-none"
+                  dialogClassName="!gap-0 !p-0"
+                >
+                  <button
+                    type="button"
+                    className="flex min-h-12 w-full items-center gap-3 px-4 text-start text-[15px] font-medium text-text-primary outline-none hover:bg-accent-50 focus-visible:bg-accent-50"
+                    onClick={() => {
+                      void navigator.clipboard
+                        .writeText(account)
+                        .then(() => toast.push("Address copied."))
+                        .catch(() =>
+                          toast.push("Could not copy the address.", "err"),
+                        );
+                      setAccountOpen(false);
+                    }}
+                  >
+                    <RiFileCopyLine className="size-5 shrink-0" aria-hidden />
+                    Copy address
+                  </button>
+                  <button
+                    type="button"
+                    className="flex min-h-12 w-full items-center gap-3 border-t border-text-primary px-4 text-start text-[15px] font-medium text-text-primary outline-none hover:bg-accent-50 focus-visible:bg-accent-50"
+                    onClick={() => {
+                      setAccountOpen(false);
+                      void signOut();
+                    }}
+                  >
+                    <RiLogoutBoxRLine className="size-5 shrink-0" aria-hidden />
+                    Sign out
+                  </button>
+                </Popover>
+              </PopoverTrigger>
             ) : (
               <Button type="button" onClick={openDialog} disabled={!ready}>
                 Sign in
