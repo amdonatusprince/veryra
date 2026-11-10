@@ -1,8 +1,4 @@
-# Veyra
-
-The infrastructure for programmable ownership.
-
-Build assets that own, earn, interact and evolve.
+# Veyra: The infrastructure for programmable ownership.
 
 Veyra is an open-source protocol for programmable membership NFTs. A membership owns an account, accumulates rewards, receives payments, and carries access rights. Transfer the NFT and the whole economic relationship moves with it. The previous owner loses control. The balance stays.
 
