@@ -104,14 +104,6 @@ export function Home() {
                   No memberships issued yet.
                 </p>
               )}
-              <ButtonLink
-                href="/overview"
-                variant="secondary"
-                trailingIcon={RiArrowRightLine}
-                className="mt-6"
-              >
-                Open the overview
-              </ButtonLink>
             </>
           )}
         </div>
